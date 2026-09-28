@@ -362,6 +362,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         textNowPlayingTitle.text = book.title
         textNowPlayingChapter.text = chapterTitle
         announceStatus("تشغيل: ${book.title} - $chapterTitle")
+        updatePlayPauseButton(true)
 
         val intent = Intent(this, AudiobookPlayerService::class.java).apply {
             action = AudiobookPlayerService.ACTION_PLAY_CHAPTER
@@ -380,6 +381,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     private fun togglePlayPause() {
         val mc = mediaController
+        if (currentActiveBook == null && booksList.isNotEmpty()) {
+            playBook(booksList[0], chapterIndex = 1)
+            return
+        }
         if (mc == null) {
             currentActiveBook?.let { playBook(it, currentChapterIndex) }
             return
@@ -389,9 +394,13 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             updatePlayPauseButton(false)
             announceStatus("تم الإيقاف المؤقت")
         } else {
-            mc.play()
-            updatePlayPauseButton(true)
-            announceStatus("جارِ التشغيل")
+            if (mc.mediaItemCount == 0 && currentActiveBook != null) {
+                playBook(currentActiveBook!!, currentChapterIndex)
+            } else {
+                mc.play()
+                updatePlayPauseButton(true)
+                announceStatus("جارِ التشغيل")
+            }
         }
     }
 
@@ -462,6 +471,14 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             textSubtitle.text = "${book.chaptersCount} فصل"
 
             view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للحذف"
+
+            view.setOnClickListener {
+                playBook(book, chapterIndex = 1)
+            }
+            view.setOnLongClickListener {
+                showDeleteConfirmation(book)
+                true
+            }
 
             return view
         }

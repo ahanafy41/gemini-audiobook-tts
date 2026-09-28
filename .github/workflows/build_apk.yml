@@ -25,6 +25,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Fixed Debug Keystore for Consistent Signatures
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Build Debug APK with Gradle
         working-directory: android
         run: |
@@ -47,13 +52,14 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.0.1"
-          name: "Gemini Audiobook TTS v1.0.1 (APK)"
+          tag_name: "v1.0.2"
+          name: "Gemini Audiobook TTS v1.0.2 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - النسخة الجاهزة للتثبيت
+            ### 📱 تطبيق Gemini Audiobook TTS - تحديث v1.0.2
             
-            - تم البناء بنجاح عبر GitHub Actions.
-            - قم بتحميل ملف `app-debug.apk` وتثبيته مباشرة على هاتفك.
-            - متوافق 100% مع TalkBack و Jieshuo.
+            - إصلاح نقر عناصر قائمة الكتب للتشغيل المباشر عبر TalkBack و Jieshuo.
+            - زر التشغيل الرئيسي يبدأ تشغيل أول كتاب في القائمة تلقائياً إذا لم يكن هناك كتاب محدد.
+            - توحيد مفتاح التوقيع الرقمي لتثبيت التحديثات المستقبلية بسلاسة بدون تعارض.
+            - محرك أندرويد الصوتي المدمج (أوفلاين بدون إنترنت وبأصوات عربية كاملة).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

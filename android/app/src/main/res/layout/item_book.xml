@@ -7,8 +7,8 @@
     android:background="@color/surface_dark"
     android:padding="16dp"
     android:layout_marginBottom="8dp"
-    android:focusable="true"
-    android:clickable="true">
+    android:focusable="false"
+    android:clickable="false">
 
     <TextView
         android:id="@+id/textBookTitle"
