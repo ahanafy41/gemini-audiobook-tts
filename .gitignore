@@ -1,0 +1,19 @@
+# Build & IDE files
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+.idea/
+*.iml
+local.properties
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+output_sample/
+my_audiobook/
+raw_chunks/
+.tmp/
+*.tmp

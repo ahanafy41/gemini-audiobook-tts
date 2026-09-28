@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "project_name": "GeminiAudiobookTTS",
+  "version": "1.0.0",
+  "track": "Track B: Universal Web / API",
+  "language": "Kotlin",
+  "frameworks": [
+    "Android SDK (API 26-35)",
+    "Jetpack Media3 (ExoPlayer)",
+    "OkHttp 4",
+    "Kotlin Coroutines & Flow"
+  ],
+  "scoping_mode": "Fast-Track",
+  "architecture": {
+    "pattern": "Clean Architecture MVVM + Foreground MediaSessionService",
+    "layers": [
+      "Presentation (Accessible Minimalist Views with 48dp targets & LiveRegions)",
+      "Domain (BookParser, MarkdownStripper, SmartTextChunker, AudioSynthesizer)",
+      "Data (GeminiTtsClient, AudioCacheRepository, AudioDecoder)"
+    ],
+    "a11y_strategy": "WCAG 2.2 AAA & TalkBack/Jieshuo Optimized: High contrast dark theme, explicit Arabic labels, zero silent buttons, audio-focus ducking, live audio progress regions",
+    "persistence": "EncryptedSharedPreferences (API Key) & Android Internal Storage (Audio Cache)"
+  },
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "title": "Smart Markdown & Text Ingestion and Chunking",
+      "description": "Parse .md and .txt books, extract chapters via headers, strip markdown noise while injecting vocal pause tags, and chunk at sentence boundaries (<8000 chars).",
+      "priority": "P0",
+      "verification_criteria": "Chunk sizes strictly <= 8000 chars, zero split words, and headers converted to chapters with vocal pauses."
+    },
+    {
+      "id": "REQ-002",
+      "title": "Gemini 3.8 Flash TTS Integration",
+      "description": "Connect to Google Gemini API (gemini-3.8-flash-tts) using BYOK, sending clean text in input and style instructions in speech_metadata, decoding Base64 audio.",
+      "priority": "P0",
+      "verification_criteria": "Valid API request payload sent, Base64 audio decoded and saved as playable audio."
+    },
+    {
+      "id": "REQ-003",
+      "title": "Accessible Media Player Engine",
+      "description": "Background audio playback using Media3 ExoPlayer with lock screen notification, earphone button control, audio-focus ducking for TalkBack, and auto-bookmarking.",
+      "priority": "P0",
+      "verification_criteria": "Background playback continues when screen is off, audio ducks when screen reader speaks, and progress persists across app restarts."
+    },
+    {
+      "id": "REQ-004",
+      "title": "Ultra-Minimalist Accessible User Interface",
+      "description": "Clean, uncluttered screen-reader optimized UI with single-tap playback, long-press actions, mini-player bar, and zero visual clutter.",
+      "priority": "P1",
+      "verification_criteria": "All touch targets >= 48dp, 100% elements have Arabic contentDescription, zero silent elements, linear focus order."
+    },
+    {
+      "id": "REQ-005",
+      "title": "Environment Self-Check & CLI Verification Tool",
+      "description": "Expose a --doctor test runner to verify environment, API connectivity, audio decoding, and file processing directly in Termux/Android.",
+      "priority": "P1",
+      "verification_criteria": "--doctor command returns 0 on healthy environment with diagnostic feedback."
+    }
+  ],
+  "entry_points": {
+    "run": "python3 /data/data/com.termux/files/home/gemini_audiobook_tts/gemini_audiobook_engine.py",
+    "test": "python3 /data/data/com.termux/files/home/gemini_audiobook_tts/test_engine.py",
+    "doctor": "python3 /data/data/com.termux/files/home/gemini_audiobook_tts/doctor.py",
+    "build": "./gradlew assembleDebug"
+  }
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مكتبة جيميني الصوتية</string>
+    <string name="title_my_books">كتبي الصوتية</string>
+    <string name="action_add_book">إضافة كتاب</string>
+    <string name="action_settings">الإعدادات</string>
+    <string name="action_play">تشغيل</string>
+    <string name="action_pause">إيقاف مؤقت</string>
+    <string name="action_rewind">إرجاع 15 ثانية</string>
+    <string name="action_fast_forward">تقديم 30 ثانية</string>
+    <string name="action_prev_chapter">الفصل السابق</string>
+    <string name="action_next_chapter">الفصل التالي</string>
+    <string name="action_speed">السرعة: 1.0x</string>
+    <string name="label_no_books">لا توجد كتب مضافة بعد. اضغط على زر إضافة كتاب لبدء التحويل التلقائي.</string>
+    <string name="label_mini_player">المشغل السريع</string>
+    <string name="dialog_enter_api_key">أدخل مفتاح Gemini API</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="hint_api_key">AIzaSy...</string>
+    <string name="status_synthesizing">جارِ توليد الصوت الذكي للفصول...</string>
+    <string name="status_ready">جاهز للاستماع</string>
+    <string name="confirm_delete_title">حذف الكتاب</string>
+    <string name="confirm_delete_msg">هل تريد حذف هذا الكتاب وملفاته الصوتية؟</string>
+    <string name="action_delete">حذف</string>
+</resources>

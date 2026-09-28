@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_dark"
+    android:padding="16dp">
+
+    <!-- Top Accessible Header with Primary Actions -->
+    <LinearLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/appTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/app_name"
+            android:textColor="@color/primary_accessible"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
+            android:text="@string/action_settings"
+            android:contentDescription="@string/action_settings"
+            android:textColor="@color/on_primary"
+            android:backgroundTint="@color/primary_accessible"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnAddBook"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
+            android:text="@string/action_add_book"
+            android:contentDescription="@string/action_add_book"
+            android:textColor="@color/on_primary"
+            android:backgroundTint="@color/primary_accessible" />
+
+    </LinearLayout>
+
+    <!-- Status & Accessibility Live Region -->
+    <TextView
+        android:id="@+id/textStatusLiveRegion"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:accessibilityLiveRegion="polite"
+        android:text="@string/status_ready"
+        android:textColor="@color/accent_control"
+        android:textSize="14sp"
+        app:layout_constraintTop_toBottomOf="@id/headerLayout" />
+
+    <!-- Books List -->
+    <ListView
+        android:id="@+id/listViewBooks"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp"
+        android:divider="@color/divider_color"
+        android:dividerHeight="1dp"
+        app:layout_constraintTop_toBottomOf="@id/textStatusLiveRegion"
+        app:layout_constraintBottom_toTopOf="@id/miniPlayerLayout" />
+
+    <!-- Empty State Text -->
+    <TextView
+        android:id="@+id/textEmptyBooks"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="24dp"
+        android:text="@string/label_no_books"
+        android:textColor="@color/text_secondary"
+        android:textSize="18sp"
+        app:layout_constraintTop_toTopOf="@id/listViewBooks"
+        app:layout_constraintBottom_toBottomOf="@id/listViewBooks" />
+
+    <!-- Mini-Player Bar (Fixed at Bottom with 48dp+ Targets) -->
+    <LinearLayout
+        android:id="@+id/miniPlayerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/surface_dark"
+        android:padding="12dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <TextView
+            android:id="@+id/textNowPlayingTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="لا يوجد كتاب قيد التشغيل حالياً"
+            android:textColor="@color/text_high_contrast"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textNowPlayingChapter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="اختر كتاباً من القائمة أعلاه لبدء الاستماع"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp" />
+
+        <!-- Accessible Playback Controls with 48dp+ targets -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginTop="12dp">
+
+            <Button
+                android:id="@+id/btnPrevChapter"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:text="السابق"
+                android:contentDescription="@string/action_prev_chapter"
+                android:textColor="@color/text_high_contrast"
+                android:backgroundTint="@color/divider_color" />
+
+            <Button
+                android:id="@+id/btnRewind"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:layout_marginStart="4dp"
+                android:text="-15ث"
+                android:contentDescription="@string/action_rewind"
+                android:textColor="@color/text_high_contrast"
+                android:backgroundTint="@color/divider_color" />
+
+            <Button
+                android:id="@+id/btnPlayPause"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.4"
+                android:minHeight="56dp"
+                android:layout_marginStart="4dp"
+                android:text="@string/action_play"
+                android:contentDescription="@string/action_play"
+                android:textStyle="bold"
+                android:textColor="@color/on_primary"
+                android:backgroundTint="@color/primary_accessible" />
+
+            <Button
+                android:id="@+id/btnFastForward"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:layout_marginStart="4dp"
+                android:text="+30ث"
+                android:contentDescription="@string/action_fast_forward"
+                android:textColor="@color/text_high_contrast"
+                android:backgroundTint="@color/divider_color" />
+
+            <Button
+                android:id="@+id/btnNextChapter"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:layout_marginStart="4dp"
+                android:text="التالي"
+                android:contentDescription="@string/action_next_chapter"
+                android:textColor="@color/text_high_contrast"
+                android:backgroundTint="@color/divider_color" />
+
+        </LinearLayout>
+
+        <!-- Speed control button -->
+        <Button
+            android:id="@+id/btnSpeed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/action_speed"
+            android:contentDescription="تغيير سرعة القراءة الصوتية"
+            android:textColor="@color/accent_control"
+            android:backgroundTint="@color/surface_dark" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

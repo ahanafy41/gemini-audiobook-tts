@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- High contrast dark theme optimized for low-vision and TalkBack / Jieshuo -->
+    <color name="bg_dark">#121212</color>
+    <color name="surface_dark">#1F1B24</color>
+    <color name="primary_accessible">#FFD600</color>
+    <color name="primary_variant">#FFAB00</color>
+    <color name="on_primary">#000000</color>
+    <color name="text_high_contrast">#FFFFFF</color>
+    <color name="text_secondary">#CCCCCC</color>
+    <color name="divider_color">#333333</color>
+    <color name="accent_control">#00E5FF</color>
+</resources>

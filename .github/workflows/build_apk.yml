@@ -1,0 +1,65 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Initialize Gradle Wrapper if missing
+        working-directory: android
+        run: |
+          if [ ! -f "gradlew" ]; then
+            echo "Generating Gradle wrapper..."
+            gradle wrapper --gradle-version 8.7
+          fi
+          chmod +x gradlew
+
+      - name: Build Debug APK with Gradle
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Debug APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeminiAudiobook-Debug-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Automatic Release with APK
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        with:
+          files: android/app/build/outputs/apk/debug/*.apk
+          tag_name: "v1.0.0"
+          name: "Gemini Audiobook TTS v1.0.0 (APK)"
+          body: |
+            ### 📱 تطبيق Gemini Audiobook TTS - النسخة الجاهزة للتثبيت
+            
+            - تم البناء بنجاح عبر GitHub Actions.
+            - قم بتحميل ملف `app-debug.apk` وتثبيته مباشرة على هاتفك.
+            - متوافق 100% مع TalkBack و Jieshuo.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

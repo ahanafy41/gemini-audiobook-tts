@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "manifest_version": "1.0.0",
+  "reference_sources": [
+    {
+      "source_path": "https://ai.google.dev/api/gemini-3.8-flash-tts",
+      "format": "REST API JSON / SSE",
+      "description": "Google Gemini 3.8 Flash TTS developer documentation, September 2026",
+      "symbol_count": 5
+    }
+  ],
+  "exported_namespaces": [
+    "com.antigravity.audiobook.domain",
+    "com.antigravity.audiobook.data",
+    "com.antigravity.audiobook.player"
+  ],
+  "symbols": [
+    {
+      "symbol_name": "SmartTextChunker",
+      "symbol_type": "class",
+      "namespace_or_module": "com.antigravity.audiobook.domain",
+      "parameters": [
+        {
+          "name": "maxChunkSize",
+          "type": "Int",
+          "default_value": "8000"
+        }
+      ],
+      "return_type": "List<String>"
+    },
+    {
+      "symbol_name": "MarkdownStripper",
+      "symbol_type": "class",
+      "namespace_or_module": "com.antigravity.audiobook.domain",
+      "parameters": [
+        {
+          "name": "rawMarkdown",
+          "type": "String"
+        }
+      ],
+      "return_type": "CleanedChapter"
+    },
+    {
+      "symbol_name": "GeminiTtsClient",
+      "symbol_type": "class",
+      "namespace_or_module": "com.antigravity.audiobook.data",
+      "parameters": [
+        {
+          "name": "apiKey",
+          "type": "String"
+        },
+        {
+          "name": "modelId",
+          "type": "String",
+          "default_value": "gemini-3.8-flash-tts"
+        }
+      ],
+      "return_type": "ByteArray"
+    },
+    {
+      "symbol_name": "AudiobookPlayerService",
+      "symbol_type": "class",
+      "namespace_or_module": "com.antigravity.audiobook.player",
+      "parameters": [],
+      "return_type": "Unit"
+    },
+    {
+      "symbol_name": "AudiobookEngine",
+      "symbol_type": "class",
+      "namespace_or_module": "com.antigravity.audiobook.engine",
+      "parameters": [],
+      "return_type": "Unit"
+    }
+  ],
+  "coverage_audit": {
+    "total_symbols_extracted": 5,
+    "verified_against_code": true,
+    "implementation_status": "Planned"
+  }
+}
