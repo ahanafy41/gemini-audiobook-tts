@@ -29,7 +29,7 @@ class GeminiTtsClient(
 ) {
 
     companion object {
-        const val DEFAULT_MODEL_ID = "gemini-2.0-flash"
+        const val DEFAULT_MODEL_ID = "gemini-3.8-flash-tts"
         val APPROVED_VOICES = listOf("Kore", "Puck", "Charon", "Fenrir", "Aoede")
         val GEMINI_VOICES = APPROVED_VOICES
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"

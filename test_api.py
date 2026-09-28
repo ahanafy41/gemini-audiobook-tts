@@ -35,7 +35,7 @@ def craft_wav_header(pcm_data: bytes, sample_rate: int = 24000, channels: int = 
     )
     return header + pcm_data
 
-def test_gemini_audio(api_key: str, model_id: str = "gemini-2.0-flash", voice_name: str = "Kore", output_path: str = "test_output.wav") -> bool:
+def test_gemini_audio(api_key: str, model_id: str = "gemini-3.8-flash-tts", voice_name: str = "Kore", output_path: str = "test_output.wav") -> bool:
     logger.info(f"[*] اختبار توليد الصوت عبر Gemini ({model_id} - صوت: {voice_name})...")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
     payload = {
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Gemini TTS API Tester")
     parser.add_argument("--key", default=os.getenv("GEMINI_API_KEY", ""), help="Gemini API Key")
     parser.add_argument("--voice", default="Kore", help="Gemini voice name (e.g. Kore, Puck, Charon, Fenrir, Aoede)")
-    parser.add_argument("--model", default="gemini-2.0-flash", help="Gemini model ID")
+    parser.add_argument("--model", default="gemini-3.8-flash-tts", help="Gemini model ID")
     parser.add_argument("--out", default="/sdcard/Download/test_gemini_voice.wav", help="Output WAV path")
     args = parser.parse_args()
     
