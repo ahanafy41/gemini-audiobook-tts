@@ -3,6 +3,7 @@ package com.antigravity.audiobook.data
 import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -141,28 +142,55 @@ class GeminiTtsClient(
             .header("User-Agent", "GeminiAudiobookAndroid/1.0")
             .build()
 
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val errorBody = response.body?.string() ?: ""
-                Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
-                throw IllegalStateException("API error ${response.code}: $errorBody")
+        var attempt = 0
+        val maxAttempts = 3
+        while (attempt < maxAttempts) {
+            attempt++
+            var shouldRetry = false
+            val retryDelayMs = 20000L
+            var audioResult: ByteArray? = null
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.code == 429) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.w(TAG, "Gemini HTTP 429 Rate Limit (attempt $attempt/$maxAttempts): $errorBody")
+                    if (attempt < maxAttempts) {
+                        shouldRetry = true
+                    } else {
+                        throw IllegalStateException("API error 429: تم تجاوز حد الطلبات للدقيقة (Rate limit). يرجى الانتظار دقيقة والمحاولة مجدداً.")
+                    }
+                } else if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                    throw IllegalStateException("API error ${response.code}: $errorBody")
+                } else {
+                    val responseStr = response.body?.string() ?: ""
+                    val json = JSONObject(responseStr)
+                    val audioBytes = extractAudioBytes(json)
+                    audioResult = if (audioBytes.size >= 4 &&
+                        audioBytes[0] == 'R'.code.toByte() &&
+                        audioBytes[1] == 'I'.code.toByte() &&
+                        audioBytes[2] == 'F'.code.toByte() &&
+                        audioBytes[3] == 'F'.code.toByte()
+                    ) {
+                        audioBytes
+                    } else {
+                        createWavHeader(audioBytes, sampleRate = 24000)
+                    }
+                }
             }
 
-            val responseStr = response.body?.string() ?: ""
-            val json = JSONObject(responseStr)
-            val audioBytes = extractAudioBytes(json)
-
-            if (audioBytes.size >= 4 &&
-                audioBytes[0] == 'R'.code.toByte() &&
-                audioBytes[1] == 'I'.code.toByte() &&
-                audioBytes[2] == 'F'.code.toByte() &&
-                audioBytes[3] == 'F'.code.toByte()
-            ) {
-                return@withContext audioBytes
+            if (audioResult != null) {
+                return@withContext audioResult!!
             }
 
-            return@withContext createWavHeader(audioBytes, sampleRate = 24000)
+            if (shouldRetry) {
+                Log.i(TAG, "Waiting 20 seconds before retry attempt $attempt/$maxAttempts...")
+                delay(retryDelayMs)
+            }
         }
+
+        throw IllegalStateException("فشل توليد الصوت بعد $maxAttempts محاولات بسبب ضغط الطلبات على الحساب.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {

@@ -16,7 +16,7 @@ data class ParsedBook(
  * Extracts structural chapters via regex patterns or provides balanced segmentation.
  */
 class BookParser(
-    private val continuousChapterSize: Int = 15000
+    private val continuousChapterSize: Int = 7500
 ) {
 
     companion object {
@@ -46,7 +46,8 @@ class BookParser(
         // 1. Check for Markdown headers
         if (Regex("^#{1,6}\\s+.+", RegexOption.MULTILINE).containsMatchIn(trimmed)) {
             Log.i(TAG, "Markdown headers detected for '$title'.")
-            val chapters = markdownStripper.extractChapters(trimmed)
+            val rawChapters = markdownStripper.extractChapters(trimmed)
+            val chapters = aggregateSections(rawChapters, continuousChapterSize)
             return ParsedBook(title, filePath, trimmed.length, chapters)
         }
 
@@ -73,13 +74,13 @@ class BookParser(
 
         if (filtered.size >= 2) {
             Log.i(TAG, "Detected ${filtered.size} headings in plain text for '$title'.")
-            val chapters = mutableListOf<CleanedChapter>()
+            val rawChapters = mutableListOf<CleanedChapter>()
 
             if (filtered[0].start > 0) {
                 val preface = trimmed.substring(0, filtered[0].start).trim()
                 if (preface.isNotEmpty()) {
                     val cleanPref = markdownStripper.cleanMarkdownText(preface)
-                    chapters.add(
+                    rawChapters.add(
                         CleanedChapter(
                             chapterTitle = "مقدمة",
                             level = 1,
@@ -101,7 +102,7 @@ class BookParser(
                     current.title
                 }
 
-                chapters.add(
+                rawChapters.add(
                     CleanedChapter(
                         chapterTitle = current.title,
                         level = 1,
@@ -111,6 +112,7 @@ class BookParser(
                 )
             }
 
+            val chapters = aggregateSections(rawChapters, continuousChapterSize)
             return ParsedBook(title, filePath, trimmed.length, chapters)
         }
 
@@ -120,8 +122,58 @@ class BookParser(
         return ParsedBook(title, filePath, trimmed.length, chapters)
     }
 
+    private fun aggregateSections(sections: List<CleanedChapter>, targetSize: Int): List<CleanedChapter> {
+        if (sections.isEmpty()) return emptyList()
+        val result = mutableListOf<CleanedChapter>()
+        val currentGroup = mutableListOf<CleanedChapter>()
+        var currentLength = 0
+
+        for (sec in sections) {
+            val secLen = sec.text.length
+            if (currentLength + secLen <= targetSize || currentGroup.isEmpty()) {
+                currentGroup.add(sec)
+                currentLength += secLen
+            } else {
+                result.add(mergeChapters(currentGroup))
+                currentGroup.clear()
+                currentGroup.add(sec)
+                currentLength = secLen
+            }
+        }
+
+        if (currentGroup.isNotEmpty()) {
+            result.add(mergeChapters(currentGroup))
+        }
+
+        return result
+    }
+
+    private fun mergeChapters(group: List<CleanedChapter>): CleanedChapter {
+        if (group.size == 1) return group[0]
+
+        val combinedTitle = if (group.size <= 3) {
+            group.joinToString(" - ") { it.chapterTitle }
+        } else {
+            "${group.first().chapterTitle} إلى ${group.last().chapterTitle}"
+        }
+
+        val combinedText = group.joinToString("\n\n<short pause>\n\n") { it.text }
+        val totalRawLength = group.sumOf { it.rawLength }
+
+        return CleanedChapter(
+            chapterTitle = combinedTitle,
+            level = 1,
+            text = combinedText,
+            rawLength = totalRawLength
+        )
+    }
+
     private fun segmentContinuousText(text: String): List<CleanedChapter> {
-        val paragraphs = text.split("\n\n")
+        val paragraphs = if (text.contains(Regex("\\r?\\n\\s*\\r?\\n"))) {
+            text.split(Regex("\\r?\\n\\s*\\r?\\n"))
+        } else {
+            text.split(Regex("\\r?\\n"))
+        }
         val chapters = mutableListOf<CleanedChapter>()
         val currentParagraphs = mutableListOf<String>()
         var currentLength = 0

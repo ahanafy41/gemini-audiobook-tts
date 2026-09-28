@@ -346,9 +346,46 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     }
 
     private fun showDeleteConfirmation(book: BookItem) {
+        val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
+        val isInProgress = totalChapters > book.chaptersCount
+
+        val options = if (isInProgress) {
+            arrayOf("تشغيل الفصول المتاحة", "استئناف تحويل باقي الفصول", "حذف الكتاب")
+        } else {
+            arrayOf("تشغيل الكتاب", "حذف الكتاب")
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(book.title)
+            .setItems(options) { _, which ->
+                if (isInProgress) {
+                    when (which) {
+                        0 -> playBook(book, chapterIndex = 1)
+                        1 -> {
+                            announceStatus("لاستئناف الكتاب، اختر ملف النص الأصلي وسيتم إكمال الفصول المتبقية تلقائياً.")
+                            try {
+                                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
+                            } catch (e: Exception) {
+                                Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        2 -> confirmActualDeletion(book)
+                    }
+                } else {
+                    when (which) {
+                        0 -> playBook(book, chapterIndex = 1)
+                        1 -> confirmActualDeletion(book)
+                    }
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun confirmActualDeletion(book: BookItem) {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_delete_title)
-            .setMessage("هل تريد حذف '${book.title}' ومقاطعه الصوتية؟")
+            .setMessage("هل أنت متأكد من حذف '${book.title}' ومقاطعه الصوتية؟")
             .setPositiveButton(R.string.action_delete) { _, _ ->
                 book.bookDir.deleteRecursively()
                 refreshBooksList()
@@ -444,8 +481,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 refreshBooksList()
             } catch (e: Exception) {
                 Log.e(TAG, "Error importing book: ${e.message}", e)
-                announceStatus("حدث خطأ أثناء معالجة الملف: ${e.localizedMessage ?: e.message}")
-                Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                refreshBooksList()
+                announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة ويمكنك تشغيلها أو استئناف الباقي.")
+                Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -599,13 +637,17 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_book, parent, false)
             val book = items[position]
 
-            val textTitle = view.findViewById<TextView>(R.id.textBookTitle)
-            val textSubtitle = view.findViewById<TextView>(R.id.textBookSubtitle)
+            val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
+            val status = book.manifest.optString("status", if (book.chaptersCount >= totalChapters) "completed" else "in_progress")
 
             textTitle.text = book.title
-            textSubtitle.text = "${book.chaptersCount} فصل"
-
-            view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للحذف"
+            if (status == "in_progress" && totalChapters > book.chaptersCount) {
+                textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (قيد الإكمال)"
+                view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (قيد الإكمال). اضغط للتشغيل، أو اضغط مطولاً للخيارات والاستئناف"
+            } else {
+                textSubtitle.text = "${book.chaptersCount} فصل (مكتمل)"
+                view.contentDescription = "${book.title}، مكتمل، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للخيارات"
+            }
 
             view.setOnClickListener {
                 playBook(book, chapterIndex = 1)

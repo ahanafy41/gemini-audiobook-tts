@@ -8,6 +8,7 @@ import com.antigravity.audiobook.domain.CleanedChapter
 import com.antigravity.audiobook.domain.ParsedBook
 import com.antigravity.audiobook.domain.SmartTextChunker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -93,6 +94,7 @@ class AudiobookEngine(
                 val chunkText = textChunks[cIdx]
                 val chunkFilename = String.format("%s_part_%03d.wav", chapterKey, cIdx + 1)
                 val chunkFile = File(rawChunksDir, chunkFilename)
+                var synthesizedNetwork = false
 
                 if (!chunkFile.exists() || chunkFile.length() <= 1000) {
                     if (!ttsClient.hasApiKey()) {
@@ -103,6 +105,7 @@ class AudiobookEngine(
                         val audioData = ttsClient.synthesize(chunkText, voiceName, deliveryStyle)
                         if (audioData.size > 1000) {
                             ttsClient.saveAudioAtomically(chunkFile, audioData)
+                            synthesizedNetwork = true
                             Log.i(TAG, "Synthesized chunk ${cIdx + 1} via Gemini AI TTS (${audioData.size} bytes).")
                         } else {
                             throw IllegalStateException("استجابة الصوت غير مكتملة.")
@@ -113,6 +116,12 @@ class AudiobookEngine(
                     }
                 }
                 chunkFiles.add(chunkFile)
+
+                // Protect RPM quota: if network synthesis occurred and more chunks remain, apply 10s pacing delay
+                if (synthesizedNetwork && (cIdx < textChunks.size - 1 || i < parsedBook.chapters.size - 1)) {
+                    Log.i(TAG, "Pacing delay (10s) between Gemini TTS requests to maintain healthy RPM quota...")
+                    delay(10000L)
+                }
             }
 
             // Concatenate chunk WAVs
@@ -133,19 +142,35 @@ class AudiobookEngine(
             completedChapters.put(chapterKey, chapterObj)
             progress.put("completed_chapters", completedChapters)
             saveProgress(progress)
+
+            // Incrementally update book_manifest.json so completed chapters appear immediately in library
+            val isAllCompleted = chaptersArray.length() == parsedBook.chapters.size
+            val currentManifest = JSONObject().apply {
+                put("title", parsedBook.title)
+                put("chapters_count", chaptersArray.length())
+                put("total_chapters", parsedBook.chapters.size)
+                put("chapters", chaptersArray)
+                put("status", if (isAllCompleted) "completed" else "in_progress")
+            }
+            saveManifest(currentManifest)
         }
 
-        val manifest = JSONObject().apply {
+        val finalManifest = JSONObject().apply {
             put("title", parsedBook.title)
-            put("chapters_count", parsedBook.chapters.size)
+            put("chapters_count", chaptersArray.length())
+            put("total_chapters", parsedBook.chapters.size)
             put("chapters", chaptersArray)
+            put("status", "completed")
         }
+        saveManifest(finalManifest)
 
+        return@withContext finalManifest
+    }
+
+    private fun saveManifest(manifest: JSONObject) {
         val tempManifest = File(outputDir, "book_manifest.json.tmp")
         tempManifest.writeText(manifest.toString(2))
         tempManifest.renameTo(manifestFile)
-
-        return@withContext manifest
     }
 
     private fun concatenateWavs(files: List<File>, outputFile: File): Long {

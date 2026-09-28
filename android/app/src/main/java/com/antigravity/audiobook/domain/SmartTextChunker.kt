@@ -16,31 +16,25 @@ class SmartTextChunker(
         const val STRICT_LIMIT = 8000
         private const val TAG = "SmartTextChunker"
         private val SENTENCE_ENDINGS = Regex("([.!?؟؛\\n]+)")
-        private val PARAGRAPH_SPLIT = Regex("\\n\\s*\\n")
+        private val PARAGRAPH_SPLIT = Regex("\\r?\\n\\s*\\r?\\n")
         private val CLAUSE_DELIMITERS = Regex("([،,;:\\-–—\\s]+)")
     }
 
     private val effectiveLimit: Int = maxChunkSize.coerceIn(100, STRICT_LIMIT)
 
     fun splitIntoSentences(text: String): List<String> {
-        val tokens = SENTENCE_ENDINGS.split(text)
-        val sentences = mutableListOf<String>()
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return emptyList()
 
-        for (i in 0 until tokens.size - 1 step 2) {
-            val body = tokens[i].trim()
-            val delimiter = tokens.getOrNull(i + 1) ?: ""
-            if (body.isNotEmpty()) {
-                sentences.add("$body$delimiter".trim())
-            } else if (sentences.isNotEmpty() && delimiter.isNotEmpty()) {
-                sentences[sentences.size - 1] = "${sentences.last()}$delimiter".trim()
+        val sentences = mutableListOf<String>()
+        val sentenceRegex = Regex("([^.!?؟؛\\n]+[.!?؟؛\\n]*|.+)")
+        for (match in sentenceRegex.findAll(trimmed)) {
+            val item = match.value.trim()
+            if (item.isNotEmpty()) {
+                sentences.add(item)
             }
         }
-
-        if (tokens.size % 2 == 1 && tokens.last().trim().isNotEmpty()) {
-            sentences.add(tokens.last().trim())
-        }
-
-        return sentences.filter { it.isNotBlank() }
+        return sentences
     }
 
     private fun splitLongSentence(sentence: String, limit: Int): List<String> {
