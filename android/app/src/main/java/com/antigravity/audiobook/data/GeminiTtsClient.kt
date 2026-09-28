@@ -8,6 +8,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -88,6 +89,8 @@ class GeminiTtsClient(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    fun hasApiKey(): Boolean = apiKey.isNotBlank() && apiKey.trim().length >= 15
+
     suspend fun synthesize(
         text: String,
         voiceName: String = "Kore",
@@ -98,21 +101,31 @@ class GeminiTtsClient(
             return@withContext generateSyntheticWav(0.1)
         }
 
-        if (apiKey.isBlank()) {
-            Log.w(TAG, "API key is missing or blank. Generating synthetic audio.")
-            return@withContext generateSyntheticWav(1.0)
+        if (!hasApiKey()) {
+            throw IllegalArgumentException("API key is not configured.")
         }
 
-        val url = customEndpoint ?: "$BASE_URL/$modelId:generateAudio?key=$apiKey"
+        val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$apiKey"
 
+        // Structured payload with generationConfig and speechConfig
         val payload = JSONObject().apply {
-            put("model", modelId)
-            put("input", cleanText)
-            put("generation_config", JSONObject().apply {
-                put("speech_config", JSONObject().apply {
-                    put("voice_config", JSONObject().apply {
-                        put("prebuilt_voice_config", JSONObject().apply {
-                            put("voice_name", voiceName)
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("text", cleanText)
+                        })
+                    })
+                })
+            })
+            put("generationConfig", JSONObject().apply {
+                put("responseModalities", JSONArray().apply {
+                    put("AUDIO")
+                })
+                put("speechConfig", JSONObject().apply {
+                    put("voiceConfig", JSONObject().apply {
+                        put("prebuiltVoiceConfig", JSONObject().apply {
+                            put("voiceName", voiceName)
                         })
                     })
                 })
@@ -129,32 +142,27 @@ class GeminiTtsClient(
             .header("User-Agent", "GeminiAudiobookAndroid/1.0")
             .build()
 
-        try {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val errorBody = response.body?.string() ?: ""
-                    Log.e(TAG, "HTTP error ${response.code}: $errorBody")
-                    return@withContext generateSyntheticWav(1.0)
-                }
-
-                val responseStr = response.body?.string() ?: ""
-                val json = JSONObject(responseStr)
-                val audioBytes = extractAudioBytes(json)
-
-                if (audioBytes.size >= 4 &&
-                    audioBytes[0] == 'R'.code.toByte() &&
-                    audioBytes[1] == 'I'.code.toByte() &&
-                    audioBytes[2] == 'F'.code.toByte() &&
-                    audioBytes[3] == 'F'.code.toByte()
-                ) {
-                    return@withContext audioBytes
-                }
-
-                return@withContext createWavHeader(audioBytes, sampleRate = 24000)
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string() ?: ""
+                Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                throw IllegalStateException("API error ${response.code}: $errorBody")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Synthesis request failed: ${e.message}", e)
-            return@withContext generateSyntheticWav(1.0)
+
+            val responseStr = response.body?.string() ?: ""
+            val json = JSONObject(responseStr)
+            val audioBytes = extractAudioBytes(json)
+
+            if (audioBytes.size >= 4 &&
+                audioBytes[0] == 'R'.code.toByte() &&
+                audioBytes[1] == 'I'.code.toByte() &&
+                audioBytes[2] == 'F'.code.toByte() &&
+                audioBytes[3] == 'F'.code.toByte()
+            ) {
+                return@withContext audioBytes
+            }
+
+            return@withContext createWavHeader(audioBytes, sampleRate = 24000)
         }
     }
 

@@ -120,7 +120,12 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     private fun setupListeners() {
         btnAddBook.setOnClickListener {
-            filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
+            try {
+                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error launching file picker: ${e.message}")
+                Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
+            }
         }
 
         btnSettings.setOnClickListener {
@@ -160,29 +165,37 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         }
 
         listViewBooks.setOnItemClickListener { _, _, position, _ ->
-            val book = booksList[position]
-            playBook(book, chapterIndex = 1)
+            if (position in booksList.indices) {
+                val book = booksList[position]
+                playBook(book, chapterIndex = 1)
+            }
         }
 
         listViewBooks.setOnItemLongClickListener { _, _, position, _ ->
-            val book = booksList[position]
-            showDeleteConfirmation(book)
+            if (position in booksList.indices) {
+                val book = booksList[position]
+                showDeleteConfirmation(book)
+            }
             true
         }
     }
 
     private fun initMediaController() {
-        val sessionToken = SessionToken(this, ComponentName(this, AudiobookPlayerService::class.java))
-        controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
-        controllerFuture?.addListener({
-            try {
-                mediaController = controllerFuture?.get()
-                mediaController?.addListener(this)
-                updatePlayPauseButton(mediaController?.isPlaying == true)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to connect to MediaController: ${e.message}")
-            }
-        }, ContextCompat.getMainExecutor(this))
+        try {
+            val sessionToken = SessionToken(this, ComponentName(this, AudiobookPlayerService::class.java))
+            controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
+            controllerFuture?.addListener({
+                try {
+                    mediaController = controllerFuture?.get()
+                    mediaController?.addListener(this)
+                    updatePlayPauseButton(mediaController?.isPlaying == true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to connect to MediaController: ${e.message}")
+                }
+            }, ContextCompat.getMainExecutor(this))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing MediaController: ${e.message}")
+        }
     }
 
     private fun announceStatus(message: String) {
@@ -191,18 +204,20 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     private fun showApiKeyDialog() {
         val input = EditText(this).apply {
-            hint = getString(R.string.hint_api_key)
+            hint = "مفتاح API الخاص بـ Gemini (اختياري)"
             setText(settingsPrefs.getString(KEY_API_KEY, ""))
         }
 
         AlertDialog.Builder(this)
-            .setTitle(R.string.dialog_enter_api_key)
+            .setTitle("إعدادات الصوت والمفتاح")
+            .setMessage("أدخل مفتاح Gemini API للاستماع بالذكاء الاصطناعي السحابي.\n\nإذا تركت الحقل فارغاً، سيعمل التطبيق تلقائياً بمحرك أندرويد الصوتي الداخلي مجاناً بدون إنترنت وبأعلى جودة وسرعة!")
             .setView(input)
             .setPositiveButton(R.string.action_save) { _, _ ->
                 val key = input.text.toString().trim()
                 settingsPrefs.edit().putString(KEY_API_KEY, key).apply()
-                announceStatus("تم حفظ مفتاح API بنجاح")
-                Toast.makeText(this, "تم حفظ المفتاح", Toast.LENGTH_SHORT).show()
+                val msg = if (key.isNotBlank()) "تم حفظ مفتاح Gemini بنجاح" else "تم تفعيل محرك أندرويد الصوتي الداخلي (أوفلاين)"
+                announceStatus(msg)
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -211,7 +226,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private fun showDeleteConfirmation(book: BookItem) {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_delete_title)
-            .setMessage("هل تريد حذف '${book.title}'؟")
+            .setMessage("هل تريد حذف '${book.title}' ومقاطعه الصوتية؟")
             .setPositiveButton(R.string.action_delete) { _, _ ->
                 book.bookDir.deleteRecursively()
                 refreshBooksList()
@@ -248,45 +263,69 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     private fun importAndProcessBook(uri: Uri) {
         lifecycleScope.launch {
-            announceStatus("جارِ استيراد الكتاب وقراءة الملف...")
-            val fileName = getFileNameFromUri(uri) ?: "كتاب_${System.currentTimeMillis()}"
-            val tempFile = File(cacheDir, fileName)
+            try {
+                announceStatus("جارِ استيراد الكتاب وقراءة الملف...")
+                val rawName = getFileNameFromUri(uri)
+                val safeName = if (!rawName.isNullOrBlank()) {
+                    rawName.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_")
+                } else {
+                    "كتاب_${System.currentTimeMillis()}.txt"
+                }
+                val tempFile = File(cacheDir, safeName)
 
-            withContext(Dispatchers.IO) {
-                contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
+                withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(tempFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    } ?: throw IllegalStateException("تعذر فتح ملف الإدخال")
+                }
+
+                if (!tempFile.exists() || tempFile.length() == 0L) {
+                    announceStatus("الملف المختار فارغ!")
+                    Toast.makeText(this@MainActivity, "الملف المختار فارغ", Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+
+                val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+                val bookTitle = tempFile.nameWithoutExtension.ifBlank { "كتاب صوتي" }
+                val bookDir = File(File(filesDir, "audiobooks"), bookTitle)
+                val ttsClient = GeminiTtsClient(apiKey = apiKey)
+                val engine = AudiobookEngine(this@MainActivity, bookDir, ttsClient)
+
+                val engineLabel = if (ttsClient.hasApiKey()) "Gemini 3.8 Flash TTS" else "محرك أندرويد الصوتي المدمج"
+                announceStatus("جارِ تحويل فصول الكتاب عبر $engineLabel...")
+
+                withContext(Dispatchers.IO) {
+                    engine.processBook(tempFile) { current, total, title ->
+                        lifecycleScope.launch(Dispatchers.Main) {
+                            announceStatus("تحويل الفصل $current من $total: $title")
+                        }
                     }
                 }
+
+                announceStatus("اكتمل تجهيز الكتاب الصوتي بنجاح! اضغط عليه للاستماع.")
+                Toast.makeText(this@MainActivity, "تم تجهيز الكتاب بنجاح", Toast.LENGTH_SHORT).show()
+                refreshBooksList()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error importing book: ${e.message}", e)
+                announceStatus("حدث خطأ أثناء معالجة الملف: ${e.localizedMessage ?: e.message}")
+                Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
             }
-
-            val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-            val bookDir = File(File(filesDir, "audiobooks"), tempFile.nameWithoutExtension)
-            val ttsClient = GeminiTtsClient(apiKey = apiKey)
-            val engine = AudiobookEngine(this@MainActivity, bookDir, ttsClient)
-
-            announceStatus("جارِ تحويل فصول الكتاب عبر Gemini 3.8 Flash TTS...")
-
-            withContext(Dispatchers.IO) {
-                engine.processBook(tempFile) { current, total, title ->
-                    lifecycleScope.launch(Dispatchers.Main) {
-                        announceStatus("تحويل الفصل $current من $total: $title")
-                    }
-                }
-            }
-
-            announceStatus("اكتمل تجهيز الكتاب الصوتي!")
-            refreshBooksList()
         }
     }
 
     private fun getFileNameFromUri(uri: Uri): String? {
         var name: String? = null
-        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (cursor.moveToFirst() && nameIndex >= 0) {
-                name = cursor.getString(nameIndex)
+        try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst() && nameIndex >= 0) {
+                    name = cursor.getString(nameIndex)
+                }
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to resolve display name from uri: ${e.message}")
         }
         return name
     }
@@ -299,8 +338,26 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         if (chapterIndex < 1 || chapterIndex > chapters.length()) return
 
         val chapterObj = chapters.getJSONObject(chapterIndex - 1)
-        val audioPath = chapterObj.optString("audio_path")
+        val audioPath = chapterObj.optString("audio_path", "")
+        val audioFile = chapterObj.optString("audio_file", "")
         val chapterTitle = chapterObj.optString("title", "فصل $chapterIndex")
+
+        val candidate1 = File(audioPath)
+        val candidate2 = File(book.bookDir, audioFile)
+        val candidate3 = File(book.bookDir, "chapters/chapter_%03d.wav".format(chapterIndex))
+
+        val resolvedFile = when {
+            candidate1.exists() && candidate1.length() > 0 -> candidate1
+            candidate2.exists() && candidate2.length() > 0 -> candidate2
+            candidate3.exists() && candidate3.length() > 0 -> candidate3
+            else -> null
+        }
+
+        if (resolvedFile == null) {
+            announceStatus("الملف الصوتي لهذا الفصل غير متوفر")
+            Toast.makeText(this, "الملف الصوتي غير موجود", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         textNowPlayingTitle.text = book.title
         textNowPlayingChapter.text = chapterTitle
@@ -308,16 +365,25 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         val intent = Intent(this, AudiobookPlayerService::class.java).apply {
             action = AudiobookPlayerService.ACTION_PLAY_CHAPTER
-            putExtra(AudiobookPlayerService.EXTRA_AUDIO_PATH, audioPath)
+            putExtra(AudiobookPlayerService.EXTRA_AUDIO_PATH, resolvedFile.absolutePath)
             putExtra(AudiobookPlayerService.EXTRA_BOOK_TITLE, book.title)
             putExtra(AudiobookPlayerService.EXTRA_CHAPTER_TITLE, chapterTitle)
             putExtra(AudiobookPlayerService.EXTRA_CHAPTER_INDEX, chapterIndex)
         }
-        startService(intent)
+        try {
+            ContextCompat.startForegroundService(this, intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting player service: ${e.message}")
+            startService(intent)
+        }
     }
 
     private fun togglePlayPause() {
-        val mc = mediaController ?: return
+        val mc = mediaController
+        if (mc == null) {
+            currentActiveBook?.let { playBook(it, currentChapterIndex) }
+            return
+        }
         if (mc.isPlaying) {
             mc.pause()
             updatePlayPauseButton(false)
@@ -359,18 +425,12 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         }
         currentSpeed = speeds[nextIdx]
         mediaController?.setPlaybackSpeed(currentSpeed)
-        btnSpeed.text = "السرعة: ${currentSpeed}x"
-        announceStatus("تم ضبط سرعة الصوت على ${currentSpeed}")
+        btnSpeed.text = "${currentSpeed}x"
+        announceStatus("سرعة القراءة: ${currentSpeed} ضعف")
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean) {
-        if (isPlaying) {
-            btnPlayPause.text = getString(R.string.action_pause)
-            btnPlayPause.contentDescription = getString(R.string.action_pause)
-        } else {
-            btnPlayPause.text = getString(R.string.action_play)
-            btnPlayPause.contentDescription = getString(R.string.action_play)
-        }
+        btnPlayPause.text = if (isPlaying) getString(R.string.btn_pause) else getString(R.string.btn_play)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -382,24 +442,26 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         super.onDestroy()
     }
 
-    private class BooksAdapter(
+    private inner class BooksAdapter(
         private val context: Context,
         private val items: List<BookItem>
     ) : BaseAdapter() {
-        override fun getCount(): Int = items.size
-        override fun getItem(pos: Int): Any = items[pos]
-        override fun getItemId(pos: Int): Long = pos.toLong()
 
-        override fun getView(pos: Int, convertView: View?, parent: ViewGroup?): View {
+        override fun getCount(): Int = items.size
+        override fun getItem(position: Int): Any = items[position]
+        override fun getItemId(position: Int): Long = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
             val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_book, parent, false)
-            val item = items[pos]
+            val book = items[position]
 
             val textTitle = view.findViewById<TextView>(R.id.textBookTitle)
-            val textSubtitle = view.findViewById<TextView>(R.id.textBookSubtitle)
+            val textChapters = view.findViewById<TextView>(R.id.textBookChapters)
 
-            textTitle.text = item.title
-            textSubtitle.text = "${item.chaptersCount} فصول • انقر للاستماع • اضغط مطولاً للحذف"
-            view.contentDescription = "${item.title}، يحتوي على ${item.chaptersCount} فصول. اضغط للتشغيل أو اضغط مطولاً للحذف."
+            textTitle.text = book.title
+            textChapters.text = "${book.chaptersCount} فصل"
+
+            view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للحذف"
 
             return view
         }

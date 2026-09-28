@@ -47,8 +47,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.0.0"
-          name: "Gemini Audiobook TTS v1.0.0 (APK)"
+          tag_name: "v1.0.1"
+          name: "Gemini Audiobook TTS v1.0.1 (APK)"
           body: |
             ### 📱 تطبيق Gemini Audiobook TTS - النسخة الجاهزة للتثبيت
             

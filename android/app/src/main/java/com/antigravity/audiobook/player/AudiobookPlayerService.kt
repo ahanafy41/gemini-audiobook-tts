@@ -6,8 +6,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
@@ -20,6 +21,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.antigravity.audiobook.MainActivity
+import java.io.File
 
 /**
  * Background Audiobook Player Service based on Jetpack Media3.
@@ -107,7 +109,15 @@ class AudiobookPlayerService : MediaSessionService(), Player.Listener {
 
     private fun playAudioFile(path: String) {
         val p = player ?: return
-        val mediaItem = MediaItem.fromUri(path)
+        val file = File(path)
+        if (!file.exists() || file.length() == 0L) {
+            Log.e(TAG, "Audio file does not exist or empty: $path")
+            return
+        }
+
+        val mediaItem = MediaItem.fromUri(Uri.fromFile(file))
+        p.stop()
+        p.clearMediaItems()
         p.setMediaItem(mediaItem)
 
         // Restore saved position if same book and chapter
@@ -182,7 +192,11 @@ class AudiobookPlayerService : MediaSessionService(), Player.Listener {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-        startForeground(NOTIFICATION_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun createNotificationChannel() {
