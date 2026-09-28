@@ -430,7 +430,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean) {
-        btnPlayPause.text = if (isPlaying) getString(R.string.btn_pause) else getString(R.string.btn_play)
+        btnPlayPause.text = if (isPlaying) getString(R.string.action_pause) else getString(R.string.action_play)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -456,10 +456,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             val book = items[position]
 
             val textTitle = view.findViewById<TextView>(R.id.textBookTitle)
-            val textChapters = view.findViewById<TextView>(R.id.textBookChapters)
+            val textSubtitle = view.findViewById<TextView>(R.id.textBookSubtitle)
 
             textTitle.text = book.title
-            textChapters.text = "${book.chaptersCount} فصل"
+            textSubtitle.text = "${book.chaptersCount} فصل"
 
             view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للحذف"
 
