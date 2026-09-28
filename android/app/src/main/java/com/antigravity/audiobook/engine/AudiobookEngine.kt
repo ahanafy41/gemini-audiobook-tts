@@ -3,7 +3,6 @@ package com.antigravity.audiobook.engine
 import android.content.Context
 import android.util.Log
 import com.antigravity.audiobook.data.GeminiTtsClient
-import com.antigravity.audiobook.data.LocalTtsEngine
 import com.antigravity.audiobook.domain.BookParser
 import com.antigravity.audiobook.domain.CleanedChapter
 import com.antigravity.audiobook.domain.ParsedBook
@@ -18,10 +17,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Android Audiobook Engine with Hybrid TTS Support.
+ * Android Audiobook Engine powered purely by Google Gemini AI TTS.
  * Converts books (.md or .txt) into multi-chapter audiobooks with resume caching.
- * Uses Gemini 3.8 Flash TTS when API key is provided, with seamless fallback
- * to Android Native On-Device TextToSpeech engine for 100% reliable Arabic voice generation.
+ * Uses Gemini Flash TTS with prebuilt high-fidelity neural voices.
  */
 class AudiobookEngine(
     private val context: Context,
@@ -37,7 +35,6 @@ class AudiobookEngine(
 
     private val bookParser = BookParser()
     private val chunker = SmartTextChunker(7500)
-    private val localTts = LocalTtsEngine(context)
     private val progressFile = File(outputDir, "progress.json")
     private val manifestFile = File(outputDir, "book_manifest.json")
 
@@ -98,38 +95,21 @@ class AudiobookEngine(
                 val chunkFile = File(rawChunksDir, chunkFilename)
 
                 if (!chunkFile.exists() || chunkFile.length() <= 1000) {
-                    var audioGenerated = false
-
-                    // 1. Try Gemini 3.8 Flash TTS if API key is present
-                    if (ttsClient.hasApiKey()) {
-                        try {
-                            val audioData = ttsClient.synthesize(chunkText, voiceName, deliveryStyle)
-                            if (audioData.size > 2000) {
-                                ttsClient.saveAudioAtomically(chunkFile, audioData)
-                                audioGenerated = true
-                                Log.i(TAG, "Synthesized chunk ${cIdx + 1} via Gemini TTS (${audioData.size} bytes).")
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Gemini synthesis failed, trying native TTS: ${e.message}")
-                        }
+                    if (!ttsClient.hasApiKey()) {
+                        throw IllegalArgumentException("مفتاح Gemini API غير متوفر. يرجى إدخال المفتاح في الإعدادات أولاً.")
                     }
 
-                    // 2. Fallback to Android Native TTS engine (Offline, zero-quota, natural speech)
-                    if (!audioGenerated) {
-                        // Strip short pause tags for native TTS clean reading
-                        val cleanSpeechText = chunkText.replace("<short pause>", ". ").trim()
-                        val success = localTts.synthesizeToFile(cleanSpeechText, chunkFile)
-                        if (success && chunkFile.exists() && chunkFile.length() > 500) {
-                            audioGenerated = true
-                            Log.i(TAG, "Synthesized chunk ${cIdx + 1} via Native Android TTS (${chunkFile.length()} bytes).")
+                    try {
+                        val audioData = ttsClient.synthesize(chunkText, voiceName, deliveryStyle)
+                        if (audioData.size > 1000) {
+                            ttsClient.saveAudioAtomically(chunkFile, audioData)
+                            Log.i(TAG, "Synthesized chunk ${cIdx + 1} via Gemini AI TTS (${audioData.size} bytes).")
+                        } else {
+                            throw IllegalStateException("استجابة الصوت غير مكتملة.")
                         }
-                    }
-
-                    // 3. Fallback to synthetic wav if both fail
-                    if (!audioGenerated) {
-                        val fallback = GeminiTtsClient.generateSyntheticWav(1.5)
-                        ttsClient.saveAudioAtomically(chunkFile, fallback)
-                        Log.w(TAG, "Synthesized chunk ${cIdx + 1} using synthetic fallback.")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Gemini AI synthesis failed for chunk ${cIdx + 1}: ${e.message}")
+                        throw e
                     }
                 }
                 chunkFiles.add(chunkFile)

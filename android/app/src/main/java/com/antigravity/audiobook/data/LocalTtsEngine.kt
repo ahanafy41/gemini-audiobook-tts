@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ class LocalTtsEngine(private val context: Context) {
 
     private var tts: TextToSpeech? = null
     private val initDeferred = CompletableDeferred<Boolean>()
+    private var selectedVoice: Voice? = null
 
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
@@ -42,6 +44,45 @@ class LocalTtsEngine(private val context: Context) {
                 initDeferred.complete(false)
             }
         }
+    }
+
+    fun getAvailableVoices(): List<Voice> {
+        val allVoices = tts?.voices ?: return emptyList()
+        return allVoices.sortedWith(
+            compareByDescending<Voice> { it.locale?.language?.lowercase() == "ar" }
+                .thenBy { it.locale?.displayName ?: "" }
+                .thenBy { it.name }
+        )
+    }
+
+    fun setVoiceByName(voiceName: String): Boolean {
+        if (voiceName.isBlank()) return false
+        val voice = tts?.voices?.firstOrNull { it.name.equals(voiceName, ignoreCase = true) }
+        return if (voice != null) {
+            selectedVoice = voice
+            val result = tts?.setVoice(voice)
+            Log.i(TAG, "Selected local voice: ${voice.name} (${voice.locale})")
+            result == TextToSpeech.SUCCESS
+        } else {
+            Log.w(TAG, "Voice $voiceName not found among available TTS voices.")
+            false
+        }
+    }
+
+    fun getSelectedVoice(): Voice? = selectedVoice
+
+    fun speak(text: String, queueMode: Int = TextToSpeech.QUEUE_FLUSH): Boolean {
+        if (tts == null) return false
+        selectedVoice?.let { tts?.setVoice(it) }
+        val params = Bundle().apply {
+            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "preview_${System.currentTimeMillis()}")
+        }
+        val result = tts?.speak(text, queueMode, params, "preview_${System.currentTimeMillis()}")
+        return result == TextToSpeech.SUCCESS
+    }
+
+    fun stop() {
+        tts?.stop()
     }
 
     suspend fun synthesizeToFile(text: String, outputFile: File): Boolean = withContext(Dispatchers.IO) {
@@ -80,6 +121,10 @@ class LocalTtsEngine(private val context: Context) {
 
         val params = Bundle().apply {
             putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+        }
+
+        selectedVoice?.let { voice ->
+            tts?.setVoice(voice)
         }
 
         val result = tts?.synthesizeToFile(text, params, outputFile, utteranceId)

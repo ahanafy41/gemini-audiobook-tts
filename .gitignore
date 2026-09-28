@@ -17,3 +17,5 @@ my_audiobook/
 raw_chunks/
 .tmp/
 *.tmp
+.backups/
+debug_manifest.json

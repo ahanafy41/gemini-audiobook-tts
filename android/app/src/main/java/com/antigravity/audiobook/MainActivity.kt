@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         private const val TAG = "MainActivity"
         private const val PREFS_SETTINGS = "gemini_audiobook_settings"
         private const val KEY_API_KEY = "api_key"
+        private const val KEY_GEMINI_VOICE = "gemini_voice"
+        private const val DEFAULT_GEMINI_VOICE = "Kore"
     }
 
     private lateinit var btnAddBook: Button
@@ -129,7 +131,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         }
 
         btnSettings.setOnClickListener {
-            showApiKeyDialog()
+            showSettingsDialog()
         }
 
         btnPlayPause.setOnClickListener {
@@ -202,25 +204,145 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         textStatusLiveRegion.text = message
     }
 
-    private fun showApiKeyDialog() {
-        val input = EditText(this).apply {
-            hint = "مفتاح API الخاص بـ Gemini (اختياري)"
-            setText(settingsPrefs.getString(KEY_API_KEY, ""))
+    private fun showSettingsDialog() {
+        var currentApiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        var currentGeminiVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_GEMINI_VOICE) ?: DEFAULT_GEMINI_VOICE
+
+        val context = this
+        val layout = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("إعدادات الصوت والمفتاح")
-            .setMessage("أدخل مفتاح Gemini API للاستماع بالذكاء الاصطناعي السحابي.\n\nإذا تركت الحقل فارغاً، سيعمل التطبيق تلقائياً بمحرك أندرويد الصوتي الداخلي مجاناً بدون إنترنت وبأعلى جودة وسرعة!")
-            .setView(input)
+        // 1. API Key Input
+        val labelApiKey = TextView(context).apply {
+            text = "مفتاح Gemini API (إلزامي للتحويل بالذكاء الاصطناعي):"
+            textSize = 14f
+            setPadding(0, 0, 0, (4 * resources.displayMetrics.density).toInt())
+            contentDescription = "عنوان: مفتاح Gemini API"
+        }
+        val inputApiKey = EditText(context).apply {
+            hint = "أدخل مفتاح Gemini API الخاص بك"
+            setText(currentApiKey)
+            contentDescription = "حقل إدخال مفتاح Gemini API"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        layout.addView(labelApiKey)
+        layout.addView(inputApiKey)
+
+        // 2. Button for Gemini Cloud Voice selection
+        val btnSelectGeminiVoice = Button(context).apply {
+            text = "صوت الذكاء الاصطناعي: $currentGeminiVoice"
+            contentDescription = "زر اختيار صوت الذكاء الاصطناعي، الصوت المختار حالياً هو $currentGeminiVoice"
+            setOnClickListener {
+                showGeminiVoicePicker(currentGeminiVoice) { selected ->
+                    currentGeminiVoice = selected
+                    text = "صوت الذكاء الاصطناعي: $selected"
+                    contentDescription = "زر اختيار صوت الذكاء الاصطناعي، الصوت المختار حالياً هو $selected"
+                    announceStatus("تم اختيار صوت Gemini: $selected")
+                }
+            }
+        }
+        layout.addView(btnSelectGeminiVoice)
+
+        // 3. Button for Test Audio Voice
+        val btnTestVoice = Button(context).apply {
+            text = "تجربة صوت الذكاء الاصطناعي في السماعة (Test Voice)"
+            contentDescription = "زر تجربة وفحص صوت الذكاء الاصطناعي فوراً في السماعة"
+            setOnClickListener {
+                val enteredKey = inputApiKey.text.toString().trim()
+                testAudioVoice(enteredKey, currentGeminiVoice)
+            }
+        }
+        layout.addView(btnTestVoice)
+
+        val scrollView = android.widget.ScrollView(context).apply {
+            addView(layout)
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle("إعدادات صوت الذكاء الاصطناعي (Gemini TTS)")
+            .setView(scrollView)
             .setPositiveButton(R.string.action_save) { _, _ ->
-                val key = input.text.toString().trim()
-                settingsPrefs.edit().putString(KEY_API_KEY, key).apply()
-                val msg = if (key.isNotBlank()) "تم حفظ مفتاح Gemini بنجاح" else "تم تفعيل محرك أندرويد الصوتي الداخلي (أوفلاين)"
+                val newKey = inputApiKey.text.toString().trim()
+                settingsPrefs.edit()
+                    .putString(KEY_API_KEY, newKey)
+                    .putString(KEY_GEMINI_VOICE, currentGeminiVoice)
+                    .apply()
+
+                val msg = if (newKey.isNotBlank()) {
+                    "تم حفظ إعدادات الذكاء الاصطناعي: صوت $currentGeminiVoice"
+                } else {
+                    "يرجى إدخال مفتاح Gemini API لتفعيل تحويل الكتب"
+                }
                 announceStatus(msg)
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
+    }
+
+    private fun showGeminiVoicePicker(currentSelected: String, onSelected: (String) -> Unit) {
+        val voices = GeminiTtsClient.APPROVED_VOICES.toTypedArray()
+        var selectedIdx = voices.indexOf(currentSelected)
+        if (selectedIdx < 0) selectedIdx = 0
+
+        AlertDialog.Builder(this)
+            .setTitle("اختر صوت الذكاء الاصطناعي (Gemini Voice)")
+            .setSingleChoiceItems(voices, selectedIdx) { dialog, which ->
+                val chosenVoice = voices[which]
+                onSelected(chosenVoice)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun testAudioVoice(apiKey: String, geminiVoice: String) {
+        val trimmedKey = apiKey.trim()
+        if (trimmedKey.isBlank() || trimmedKey.length < 15) {
+            announceStatus("يرجى إدخال مفتاح Gemini API أولاً لتجربة الصوت!")
+            Toast.makeText(this, "يرجى إدخال مفتاح Gemini API أولاً", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        announceStatus("جارِ تجربة صوت الذكاء الاصطناعي ($geminiVoice)...")
+        lifecycleScope.launch {
+            try {
+                val client = GeminiTtsClient(apiKey = trimmedKey)
+                val audioData = withContext(Dispatchers.IO) {
+                    client.synthesize("مرحباً يا أحمد، هذا فحص واختبار صوت جيميني بالذكاء الاصطناعي.", voiceName = geminiVoice)
+                }
+                val previewFile = File(cacheDir, "preview_gemini.wav")
+                client.saveAudioAtomically(previewFile, audioData)
+                playAudioFileDirectly(previewFile)
+                announceStatus("تم تشغيل صوت الذكاء الاصطناعي بنجاح: $geminiVoice")
+            } catch (e: Exception) {
+                Log.e(TAG, "Gemini preview failed: ${e.message}")
+                announceStatus("فشل توليد الصوت: ${e.localizedMessage ?: e.message}")
+                Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun playAudioFileDirectly(file: File) {
+        try {
+            android.media.MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                prepare()
+                start()
+                setOnCompletionListener { mp ->
+                    mp.release()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing audio file: ${e.message}")
+        }
+    }
+
+    private fun showApiKeyDialog() {
+        showSettingsDialog()
     }
 
     private fun showDeleteConfirmation(book: BookItem) {
@@ -288,13 +410,26 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 }
 
                 val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+                val geminiVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_GEMINI_VOICE) ?: DEFAULT_GEMINI_VOICE
+
+                if (apiKey.isBlank() || apiKey.length < 15) {
+                    announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لتحويل الكتاب بالذكاء الاصطناعي")
+                    Toast.makeText(this@MainActivity, "يرجى إدخال مفتاح Gemini API أولاً في الإعدادات", Toast.LENGTH_LONG).show()
+                    showSettingsDialog()
+                    return@launch
+                }
+
                 val bookTitle = tempFile.nameWithoutExtension.ifBlank { "كتاب صوتي" }
                 val bookDir = File(File(filesDir, "audiobooks"), bookTitle)
                 val ttsClient = GeminiTtsClient(apiKey = apiKey)
-                val engine = AudiobookEngine(this@MainActivity, bookDir, ttsClient)
+                val engine = AudiobookEngine(
+                    context = this@MainActivity,
+                    outputDir = bookDir,
+                    ttsClient = ttsClient,
+                    voiceName = geminiVoice
+                )
 
-                val engineLabel = if (ttsClient.hasApiKey()) "Gemini 3.8 Flash TTS" else "محرك أندرويد الصوتي المدمج"
-                announceStatus("جارِ تحويل فصول الكتاب عبر $engineLabel...")
+                announceStatus("جارِ تحويل فصول الكتاب عبر الذكاء الاصطناعي Gemini TTS (صوت: $geminiVoice)...")
 
                 withContext(Dispatchers.IO) {
                     engine.processBook(tempFile) { current, total, title ->

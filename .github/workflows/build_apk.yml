@@ -52,14 +52,16 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.0.2"
-          name: "Gemini Audiobook TTS v1.0.2 (APK)"
+          tag_name: "v1.0.3"
+          name: "Gemini Audiobook TTS v1.0.3 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - تحديث v1.0.2
+            ### 📱 تطبيق Gemini Audiobook TTS - تحديث v1.0.3 (ذكاء اصطناعي كامل)
             
-            - إصلاح نقر عناصر قائمة الكتب للتشغيل المباشر عبر TalkBack و Jieshuo.
-            - زر التشغيل الرئيسي يبدأ تشغيل أول كتاب في القائمة تلقائياً إذا لم يكن هناك كتاب محدد.
-            - توحيد مفتاح التوقيع الرقمي لتثبيت التحديثات المستقبلية بسلاسة بدون تعارض.
-            - محرك أندرويد الصوتي المدمج (أوفلاين بدون إنترنت وبأصوات عربية كاملة).
+            - الاعتماد الحصري الكامل 100% على الذكاء الاصطناعي التوليدي عبر Google Gemini Flash TTS.
+            - دعم النموذج الجديد الرسمي `gemini-3.8-flash-tts` و `gemini-2.0-flash`.
+            - إلغاء الأصوات المحلية تماماً لضمان أعلى جودة صوتية بشرية نقية وطبيعية.
+            - واجهة إعدادات مخصصة وسهلة مع دعم أصوات Gemini الرسمية (Kore, Puck, Charon, Fenrir, Aoede).
+            - زر فحص واستماع مباشر للصوت في السماعة للتأكد قبل تحويل الكتب.
+            - توافق فائق وسلس مع قارئات الشاشة TalkBack و Jieshuo.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

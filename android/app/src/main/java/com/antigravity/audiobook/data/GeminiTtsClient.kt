@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.sin
 
 /**
- * Gemini 3.8 Flash TTS Client for Android.
+ * Gemini 2.0 Flash TTS Client for Android.
  * Communicates with Google's Gemini TTS endpoint using OkHttp,
  * handles Base64 audio decoding, and adds standard 44-byte WAV headers for PCM data.
  */
@@ -29,7 +29,9 @@ class GeminiTtsClient(
 ) {
 
     companion object {
-        const val DEFAULT_MODEL_ID = "gemini-3.8-flash-tts"
+        const val DEFAULT_MODEL_ID = "gemini-2.0-flash"
+        val APPROVED_VOICES = listOf("Kore", "Puck", "Charon", "Fenrir", "Aoede")
+        val GEMINI_VOICES = APPROVED_VOICES
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
         private const val TAG = "GeminiTtsClient"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
@@ -129,9 +131,6 @@ class GeminiTtsClient(
                         })
                     })
                 })
-            })
-            put("speech_metadata", JSONObject().apply {
-                put("style", style)
             })
         }
 
