@@ -640,6 +640,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
             val status = book.manifest.optString("status", if (book.chaptersCount >= totalChapters) "completed" else "in_progress")
 
+            val textTitle = view.findViewById<TextView>(R.id.textBookTitle)
+            val textSubtitle = view.findViewById<TextView>(R.id.textBookSubtitle)
+
             textTitle.text = book.title
             if (status == "in_progress" && totalChapters > book.chaptersCount) {
                 textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (قيد الإكمال)"
