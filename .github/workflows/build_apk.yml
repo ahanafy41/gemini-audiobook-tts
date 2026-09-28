@@ -25,10 +25,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Initialize Gradle Wrapper if missing
+      - name: Build Debug APK with Gradle
         working-directory: android
         run: |
           if [ ! -f "gradlew" ]; then
@@ -36,10 +33,7 @@ jobs:
             gradle wrapper --gradle-version 8.7
           fi
           chmod +x gradlew
-
-      - name: Build Debug APK with Gradle
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload Debug APK to Artifacts
         uses: actions/upload-artifact@v4
@@ -50,7 +44,7 @@ jobs:
 
       - name: Automatic Release with APK
         uses: softprops/action-gh-release@v2
-        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
           tag_name: "v1.0.0"
