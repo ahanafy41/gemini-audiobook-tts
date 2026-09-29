@@ -25,10 +25,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Fixed Debug Keystore for Consistent Signatures
+      - name: Verify Permanent Keystore
         run: |
-          mkdir -p ~/.android
-          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          if [ -f "android/keystore/permanent.keystore" ]; then
+            echo "Permanent Keystore verified: android/keystore/permanent.keystore"
+          else
+            echo "Error: android/keystore/permanent.keystore missing!"
+            exit 1
+          fi
 
       - name: Build Debug APK with Gradle
         working-directory: android
@@ -52,11 +56,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.1.3"
-          name: "Gemini Audiobook TTS v1.1.3 (APK)"
+          tag_name: "v1.1.4"
+          name: "Gemini Audiobook TTS v1.1.4 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.1.3
-            
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.1.4
+
+            - **حل مشكلة تعارض حزم التثبيت للأبد (Permanent Keystore Signing)**:
+              - اعتماد مفتاح توقيع رقمي دائم وموحد (`permanent.keystore`) لجميع الإصدارات، مما يضمن تثبيت كافة التحديثات المستقبلية مباشرة بضغطة واحدة فوق أي إصدار سابق دون الحاجة لمسح التطبيق إطلاقاً.
             - **تصدير وسحب الملفات الصوتية إلى التنزيلات (Export to Downloads)**:
               - إمكانية سحب وتصدير كل فصول الكتاب الصوتية بنقرة واحدة إلى مجلد الهاتف العام (`Download/Audiobooks/<اسم الكتاب>/`) للوصول إليها من أي مدير ملفات أو مشغل صوتي خارجي.
               - التصدير التلقائي في الخلفية لكل فصل صوتي يتم تحويله مباشرة إلى مجلد التنزيلات.

@@ -11,15 +11,43 @@ android {
         applicationId = "com.antigravity.audiobook"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.1.3"
+        versionCode = 11
+        versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val findKeystore = {
+        val f1 = file("${project.rootDir}/keystore/permanent.keystore")
+        val f2 = file("${project.rootDir}/android/keystore/permanent.keystore")
+        if (f1.exists()) f1 else if (f2.exists()) f2 else null
+    }
+
+    signingConfigs {
+        create("permanentSign") {
+            val ksFile = findKeystore()
+            if (ksFile != null && ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = "geminiAudiobook2026"
+                keyAlias = "audiobook_key"
+                keyPassword = "geminiAudiobook2026"
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            val ksFile = findKeystore()
+            if (ksFile != null && ksFile.exists()) {
+                signingConfig = signingConfigs.getByName("permanentSign")
+            }
+        }
         release {
             isMinifyEnabled = false
+            val ksFile = findKeystore()
+            if (ksFile != null && ksFile.exists()) {
+                signingConfig = signingConfigs.getByName("permanentSign")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
