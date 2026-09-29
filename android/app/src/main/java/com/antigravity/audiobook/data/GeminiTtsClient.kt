@@ -5,6 +5,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import okhttp3.Dns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,6 +18,9 @@ import com.antigravity.audiobook.domain.VoiceProfile
 import com.antigravity.audiobook.domain.VoiceStylePreset
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
@@ -90,10 +94,34 @@ class GeminiTtsClient(
         }
     }
 
+    private class ResilientDns : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            return try {
+                Dns.SYSTEM.lookup(hostname)
+            } catch (e: UnknownHostException) {
+                var lastEx: UnknownHostException = e
+                for (retry in 1..3) {
+                    try {
+                        Thread.sleep(1000L * retry)
+                        val addresses = InetAddress.getAllByName(hostname).toList()
+                        if (addresses.isNotEmpty()) return addresses
+                    } catch (ex: UnknownHostException) {
+                        lastEx = ex
+                    } catch (_: InterruptedException) {
+                        break
+                    }
+                }
+                throw lastEx
+            }
+        }
+    }
+
     private val httpClient = OkHttpClient.Builder()
+        .dns(ResilientDns())
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     fun hasApiKey(): Boolean = apiKey.isNotBlank() && apiKey.trim().length >= 15
@@ -188,40 +216,60 @@ class GeminiTtsClient(
             .build()
 
         var attempt = 0
-        val maxAttempts = 3
+        val maxAttempts = 5
         while (attempt < maxAttempts) {
             attempt++
             var shouldRetry = false
-            val retryDelayMs = 20000L
+            var retryDelayMs = 15000L
             var audioResult: ByteArray? = null
 
-            httpClient.newCall(request).execute().use { response ->
-                if (response.code == 429) {
-                    val errorBody = response.body?.string() ?: ""
-                    Log.w(TAG, "Gemini HTTP 429 Rate Limit (attempt $attempt/$maxAttempts): $errorBody")
-                    if (attempt < maxAttempts) {
-                        shouldRetry = true
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.code == 429) {
+                        val errorBody = response.body?.string() ?: ""
+                        Log.w(TAG, "Gemini HTTP 429 Rate Limit (attempt $attempt/$maxAttempts): $errorBody")
+                        if (attempt < maxAttempts) {
+                            shouldRetry = true
+                            retryDelayMs = 20000L
+                        } else {
+                            throw IllegalStateException("API error 429: تم تجاوز حد الطلبات للدقيقة (Rate limit). يرجى الانتظار والمحاولة مجدداً.")
+                        }
+                    } else if (response.code in 500..599) {
+                        val errorBody = response.body?.string() ?: ""
+                        Log.w(TAG, "Gemini HTTP Server Error ${response.code} (attempt $attempt/$maxAttempts): $errorBody")
+                        if (attempt < maxAttempts) {
+                            shouldRetry = true
+                            retryDelayMs = 15000L
+                        } else {
+                            throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
+                        }
+                    } else if (!response.isSuccessful) {
+                        val errorBody = response.body?.string() ?: ""
+                        Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                        throw IllegalStateException("API error ${response.code}: $errorBody")
                     } else {
-                        throw IllegalStateException("API error 429: تم تجاوز حد الطلبات للدقيقة (Rate limit). يرجى الانتظار دقيقة والمحاولة مجدداً.")
+                        val responseStr = response.body?.string() ?: ""
+                        val json = JSONObject(responseStr)
+                        val audioBytes = extractAudioBytes(json)
+                        audioResult = if (audioBytes.size >= 4 &&
+                            audioBytes[0] == 'R'.code.toByte() &&
+                            audioBytes[1] == 'I'.code.toByte() &&
+                            audioBytes[2] == 'F'.code.toByte() &&
+                            audioBytes[3] == 'F'.code.toByte()
+                        ) {
+                            audioBytes
+                        } else {
+                            createWavHeader(audioBytes, sampleRate = 24000)
+                        }
                     }
-                } else if (!response.isSuccessful) {
-                    val errorBody = response.body?.string() ?: ""
-                    Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
-                    throw IllegalStateException("API error ${response.code}: $errorBody")
+                }
+            } catch (ioe: IOException) {
+                Log.w(TAG, "Network or DNS connection error on attempt $attempt/$maxAttempts: ${ioe.message}")
+                if (attempt < maxAttempts) {
+                    shouldRetry = true
+                    retryDelayMs = (8000L * attempt).coerceAtMost(30000L)
                 } else {
-                    val responseStr = response.body?.string() ?: ""
-                    val json = JSONObject(responseStr)
-                    val audioBytes = extractAudioBytes(json)
-                    audioResult = if (audioBytes.size >= 4 &&
-                        audioBytes[0] == 'R'.code.toByte() &&
-                        audioBytes[1] == 'I'.code.toByte() &&
-                        audioBytes[2] == 'F'.code.toByte() &&
-                        audioBytes[3] == 'F'.code.toByte()
-                    ) {
-                        audioBytes
-                    } else {
-                        createWavHeader(audioBytes, sampleRate = 24000)
-                    }
+                    throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت أو الـ DNS بعد $maxAttempts محاولات: ${ioe.localizedMessage ?: ioe.message}")
                 }
             }
 
@@ -230,12 +278,12 @@ class GeminiTtsClient(
             }
 
             if (shouldRetry) {
-                Log.i(TAG, "Waiting 20 seconds before retry attempt $attempt/$maxAttempts...")
+                Log.i(TAG, "Waiting ${retryDelayMs / 1000} seconds before retry attempt $attempt/$maxAttempts...")
                 delay(retryDelayMs)
             }
         }
 
-        throw IllegalStateException("فشل توليد الصوت بعد $maxAttempts محاولات بسبب ضغط الطلبات على الحساب.")
+        throw IllegalStateException("فشل توليد الصوت بعد $maxAttempts محاولات.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {
@@ -303,35 +351,40 @@ class GeminiTtsClient(
             .header("User-Agent", "GeminiAudiobookAndroid/1.1.0")
             .build()
 
-        httpClient.newCall(request).execute().use { response ->
-            val body = response.body?.string() ?: ""
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Voice design failed (${response.code}): $body")
-                throw IllegalStateException("فشل تصميم الصوت (${response.code}): $body")
-            }
-            val json = JSONObject(body)
-            val fullName = json.optString("name", "")
-            val voiceId = fullName.removePrefix("voices/")
-            val sampleB64 = json.optString("sample_audio", "")
-            val sampleBytes = if (sampleB64.isNotEmpty()) {
-                try {
-                    val raw = Base64.decode(sampleB64, Base64.DEFAULT)
-                    if (raw.size >= 4 &&
-                        raw[0] == 'R'.code.toByte() &&
-                        raw[1] == 'I'.code.toByte() &&
-                        raw[2] == 'F'.code.toByte() &&
-                        raw[3] == 'F'.code.toByte()
-                    ) {
-                        raw
-                    } else {
-                        createWavHeader(raw, sampleRate = 24000)
-                    }
-                } catch (e: Exception) {
-                    null
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Voice design failed (${response.code}): $body")
+                    throw IllegalStateException("فشل تصميم الصوت (${response.code}): $body")
                 }
-            } else null
+                val json = JSONObject(body)
+                val fullName = json.optString("name", "")
+                val voiceId = fullName.removePrefix("voices/")
+                val sampleB64 = json.optString("sample_audio", "")
+                val sampleBytes = if (sampleB64.isNotEmpty()) {
+                    try {
+                        val raw = Base64.decode(sampleB64, Base64.DEFAULT)
+                        if (raw.size >= 4 &&
+                            raw[0] == 'R'.code.toByte() &&
+                            raw[1] == 'I'.code.toByte() &&
+                            raw[2] == 'F'.code.toByte() &&
+                            raw[3] == 'F'.code.toByte()
+                        ) {
+                            raw
+                        } else {
+                            createWavHeader(raw, sampleRate = 24000)
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
 
-            Pair(voiceId, sampleBytes)
+                Pair(voiceId, sampleBytes)
+            }
+        } catch (ioe: IOException) {
+            Log.e(TAG, "Network or DNS error in createCustomVoice: ${ioe.message}")
+            throw IOException("تعذر الاتصال بالخادم لتصميم الصوت بسبب مشكلة في الشبكة أو الـ DNS: ${ioe.localizedMessage ?: ioe.message}")
         }
     }
 

@@ -886,14 +886,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 if (isInProgress) {
                     when (which) {
                         0 -> playBook(book, chapterIndex = 1)
-                        1 -> {
-                            announceStatus("لاستئناف الكتاب، اختر ملف النص الأصلي وسيتم إكمال الفصول المتبقية تلقائياً.")
-                            try {
-                                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
-                            } catch (e: Exception) {
-                                Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        1 -> resumeIncompleteBook(book)
                         2 -> confirmActualDeletion(book)
                     }
                 } else {
@@ -905,6 +898,21 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
+    }
+
+    private fun resumeIncompleteBook(book: BookItem) {
+        val persistentSource = File(book.bookDir, "source_book.txt")
+        if (persistentSource.exists() && persistentSource.length() > 0) {
+            announceStatus("استئناف معالجة الفصول المتبقية لكتاب «${book.title}»...")
+            startBookProcessing(persistentSource, book.bookDir, book.title)
+        } else {
+            announceStatus("يرجى اختيار ملف النص الأصلي للكتاب لاستئناف معالجته.")
+            try {
+                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
+            } catch (e: Exception) {
+                Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun confirmActualDeletion(book: BookItem) {
@@ -971,6 +979,20 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     return@launch
                 }
 
+                val bookTitle = tempFile.nameWithoutExtension.ifBlank { "كتاب صوتي" }
+                val bookDir = File(File(filesDir, "audiobooks"), bookTitle)
+                startBookProcessing(tempFile, bookDir, bookTitle)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error importing book: ${e.message}", e)
+                announceStatus("فشل استيراد الملف: ${e.localizedMessage ?: e.message}")
+                Toast.makeText(this@MainActivity, "فشل الاستيراد: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun startBookProcessing(sourceFile: File, bookDir: File, bookTitle: String) {
+        lifecycleScope.launch {
+            try {
                 val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
                 val narratorVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
                 val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
@@ -986,10 +1008,13 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     return@launch
                 }
 
-                val bookTitle = tempFile.nameWithoutExtension.ifBlank { "كتاب صوتي" }
-                val bookDir = File(File(filesDir, "audiobooks"), bookTitle)
-                val ttsClient = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+                bookDir.mkdirs()
+                val persistentSource = File(bookDir, "source_book.txt")
+                if (sourceFile.absolutePath != persistentSource.absolutePath) {
+                    sourceFile.copyTo(persistentSource, overwrite = true)
+                }
 
+                val ttsClient = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
                 val multiConfig = if (isMultiSpeaker) {
                     MultiSpeakerConfig(
                         isEnabled = true,
@@ -1007,10 +1032,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     multiSpeakerConfig = multiConfig
                 )
 
-                announceStatus("جارِ تحويل فصول الكتاب عبر الذكاء الاصطناعي Gemini TTS (نمط: ${stylePreset.titleArabic})...")
+                announceStatus("جارِ تحويل فصول «$bookTitle» عبر الذكاء الاصطناعي (نمط: ${stylePreset.titleArabic})...")
 
                 withContext(Dispatchers.IO) {
-                    engine.processBook(tempFile) { current, total, title ->
+                    engine.processBook(persistentSource) { current, total, title ->
                         lifecycleScope.launch(Dispatchers.Main) {
                             announceStatus("تحويل الفصل $current من $total: $title")
                         }
@@ -1021,7 +1046,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 Toast.makeText(this@MainActivity, "تم تجهيز الكتاب بنجاح", Toast.LENGTH_SHORT).show()
                 refreshBooksList()
             } catch (e: Exception) {
-                Log.e(TAG, "Error importing book: ${e.message}", e)
+                Log.e(TAG, "Error processing book: ${e.message}", e)
                 refreshBooksList()
                 announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
                 Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
@@ -1193,14 +1218,22 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             textTitle.text = book.title
             if (status == "in_progress" && totalChapters > book.chaptersCount) {
                 textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (قيد الإكمال)"
-                view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (قيد الإكمال). اضغط للتشغيل، أو اضغط مطولاً للخيارات والاستئناف"
+                if (book.chaptersCount == 0) {
+                    view.contentDescription = "${book.title}، قيد الإكمال، 0 فصول جاهزة من أصل $totalChapters. اضغط للاستئناف، أو اضغط مطولاً للخيارات"
+                } else {
+                    view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (قيد الإكمال). اضغط للتشغيل، أو اضغط مطولاً للخيارات والاستئناف"
+                }
             } else {
                 textSubtitle.text = "${book.chaptersCount} فصل (مكتمل)"
                 view.contentDescription = "${book.title}، مكتمل، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للخيارات"
             }
 
             view.setOnClickListener {
-                playBook(book, chapterIndex = 1)
+                if (status == "in_progress" && book.chaptersCount == 0) {
+                    resumeIncompleteBook(book)
+                } else {
+                    playBook(book, chapterIndex = 1)
+                }
             }
             view.setOnLongClickListener {
                 showDeleteConfirmation(book)
