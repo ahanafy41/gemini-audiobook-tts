@@ -9,6 +9,7 @@ import com.antigravity.audiobook.domain.MultiSpeakerConfig
 import com.antigravity.audiobook.domain.ParsedBook
 import com.antigravity.audiobook.domain.SmartTextChunker
 import com.antigravity.audiobook.domain.VoiceStylePreset
+import com.antigravity.audiobook.util.AudioExporter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -136,6 +137,18 @@ class AudiobookEngine(
             // Concatenate chunk WAVs
             val durationMs = concatenateWavs(chunkFiles, chapterWav)
             val durationSec = durationMs / 1000
+
+            try {
+                AudioExporter.exportChapterToDownloads(
+                    context = context,
+                    chapterWav = chapterWav,
+                    bookTitle = parsedBook.title,
+                    chapterIndex = chapterIdx,
+                    chapterTitle = chapter.chapterTitle
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Background export to Downloads skipped: ${e.message}")
+            }
 
             val chapterObj = JSONObject().apply {
                 put("index", chapterIdx)

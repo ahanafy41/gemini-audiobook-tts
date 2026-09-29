@@ -33,6 +33,7 @@ import com.antigravity.audiobook.domain.VoiceProfile
 import com.antigravity.audiobook.domain.VoiceStylePreset
 import com.antigravity.audiobook.engine.AudiobookEngine
 import com.antigravity.audiobook.player.AudiobookPlayerService
+import com.antigravity.audiobook.util.AudioExporter
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
@@ -875,9 +876,20 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val isInProgress = totalChapters > book.chaptersCount
 
         val options = if (isInProgress) {
-            arrayOf("تشغيل الفصول المتاحة", "استئناف تحويل باقي الفصول", "حذف الكتاب")
+            arrayOf(
+                "تشغيل الفصول المتاحة",
+                "استئناف تحويل باقي الفصول",
+                "تصدير الفصول المنجزة إلى التنزيلات (Downloads)",
+                "مشاركة الملفات الصوتية (Share)",
+                "حذف الكتاب"
+            )
         } else {
-            arrayOf("تشغيل الكتاب", "حذف الكتاب")
+            arrayOf(
+                "تشغيل الكتاب",
+                "تصدير الصوت إلى مجلد التنزيلات (Downloads)",
+                "مشاركة الملفات الصوتية (Share)",
+                "حذف الكتاب"
+            )
         }
 
         AlertDialog.Builder(this)
@@ -887,17 +899,46 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     when (which) {
                         0 -> playBook(book, chapterIndex = 1)
                         1 -> resumeIncompleteBook(book)
-                        2 -> confirmActualDeletion(book)
+                        2 -> exportBook(book)
+                        3 -> shareBook(book)
+                        4 -> confirmActualDeletion(book)
                     }
                 } else {
                     when (which) {
                         0 -> playBook(book, chapterIndex = 1)
-                        1 -> confirmActualDeletion(book)
+                        1 -> exportBook(book)
+                        2 -> shareBook(book)
+                        3 -> confirmActualDeletion(book)
                     }
                 }
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
+    }
+
+    private fun exportBook(book: BookItem) {
+        announceStatus("جارِ تصدير فصول الكتاب إلى مجلد التنزيلات...")
+        lifecycleScope.launch(Dispatchers.IO) {
+            val (count, path) = AudioExporter.exportBookToDownloads(this@MainActivity, book)
+            withContext(Dispatchers.Main) {
+                if (count > 0) {
+                    val msg = "تم تصدير $count فصول بنجاح إلى: $path"
+                    announceStatus(msg)
+                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                } else {
+                    announceStatus("لم يتم العثور على فصول جاهزة لتصديرها")
+                    Toast.makeText(this@MainActivity, "لا توجد فصول جاهزة", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun shareBook(book: BookItem) {
+        val ok = AudioExporter.shareBookAudio(this, book)
+        if (!ok) {
+            announceStatus("تعذر مشاركة الملفات الصوتية")
+            Toast.makeText(this, "تعذر مشاركة الملفات الصوتية", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun resumeIncompleteBook(book: BookItem) {
