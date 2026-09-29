@@ -1,67 +1,66 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "project_name": "GeminiAudiobookTTS",
-  "version": "1.0.0",
-  "track": "Track B: Universal Web / API",
+  "project_name": "Gemini Audiobook TTS",
+  "version": "1.1.0",
+  "track": "Track A: Desktop & Offline",
   "language": "Kotlin",
   "frameworks": [
-    "Android SDK (API 26-35)",
-    "Jetpack Media3 (ExoPlayer)",
-    "OkHttp 4",
-    "Kotlin Coroutines & Flow"
+    "Android",
+    "Google Material Components",
+    "Media3 ExoPlayer",
+    "OkHttp"
   ],
   "scoping_mode": "Fast-Track",
   "architecture": {
-    "pattern": "Clean Architecture MVVM + Foreground MediaSessionService",
+    "pattern": "Material Design Multi-Tab Architecture with Clean Domain & Data Layers",
     "layers": [
-      "Presentation (Accessible Minimalist Views with 48dp targets & LiveRegions)",
-      "Domain (BookParser, MarkdownStripper, SmartTextChunker, AudioSynthesizer)",
-      "Data (GeminiTtsClient, AudioCacheRepository, AudioDecoder)"
+      "Presentation (Material BottomNavigationView Tabs: Library, Player, Studio, Settings)",
+      "Domain (BookParser, SmartTextChunker, DialogueTurnAnnotator, VoiceProfile, VoiceStylePreset)",
+      "Engine (AudiobookEngine, AudioPlayerService)",
+      "Data (GeminiTtsClient, SharedPreferences)"
     ],
-    "a11y_strategy": "WCAG 2.2 AAA & TalkBack/Jieshuo Optimized: High contrast dark theme, explicit Arabic labels, zero silent buttons, audio-focus ducking, live audio progress regions",
-    "persistence": "EncryptedSharedPreferences (API Key) & Android Internal Storage (Audio Cache)"
+    "a11y_strategy": "WCAG 2.2 AAA & Android Accessibility Invariants (TalkBack & Jieshuo / CSR) with explicit contentDescription, polite live regions, and single-choice dialogs",
+    "persistence": "SharedPreferences & Incremental JSON Manifests"
   },
   "requirements": [
     {
-      "id": "REQ-001",
-      "title": "Smart Markdown & Text Ingestion and Chunking",
-      "description": "Parse .md and .txt books, extract chapters via headers, strip markdown noise while injecting vocal pause tags, and chunk at sentence boundaries (<8000 chars).",
+      "id": "REQ-1",
+      "title": "Material Design Bottom Navigation",
+      "description": "Restructure UI with 4 accessible bottom tabs: Library, Now Playing Player, Voice Studio, and Settings.",
       "priority": "P0",
-      "verification_criteria": "Chunk sizes strictly <= 8000 chars, zero split words, and headers converted to chapters with vocal pauses."
+      "verification_criteria": "BottomNavigationView switches content smoothly and announces tab names and selection state to TalkBack."
     },
     {
-      "id": "REQ-002",
-      "title": "Gemini 3.8 Flash TTS Integration",
-      "description": "Connect to Google Gemini API (gemini-3.8-flash-tts) using BYOK, sending clean text in input and style instructions in speech_metadata, decoding Base64 audio.",
+      "id": "REQ-2",
+      "title": "Voice Style Presets with Director Prompts",
+      "description": "Inject proven director prompts for Documentary, Dramatic, Calm, and Natural styles into Gemini 3.8 Flash TTS requests.",
       "priority": "P0",
-      "verification_criteria": "Valid API request payload sent, Base64 audio decoded and saved as playable audio."
+      "verification_criteria": "GeminiTtsClient prefixes text parts with director prompt tags that steer voice acting without verbalizing tags."
     },
     {
-      "id": "REQ-003",
-      "title": "Accessible Media Player Engine",
-      "description": "Background audio playback using Media3 ExoPlayer with lock screen notification, earphone button control, audio-focus ducking for TalkBack, and auto-bookmarking.",
-      "priority": "P0",
-      "verification_criteria": "Background playback continues when screen is off, audio ducks when screen reader speaks, and progress persists across app restarts."
-    },
-    {
-      "id": "REQ-004",
-      "title": "Ultra-Minimalist Accessible User Interface",
-      "description": "Clean, uncluttered screen-reader optimized UI with single-tap playback, long-press actions, mini-player bar, and zero visual clutter.",
+      "id": "REQ-3",
+      "title": "Multi-Speaker Dialogue Generation",
+      "description": "Implement multiSpeakerVoiceConfig supporting 2 speakers (Narrator and Character) with automatic quote detection.",
       "priority": "P1",
-      "verification_criteria": "All touch targets >= 48dp, 100% elements have Arabic contentDescription, zero silent elements, linear focus order."
+      "verification_criteria": "Dialogue enclosed in quotation marks is assigned to secondary voice while narrative is assigned to primary voice."
     },
     {
-      "id": "REQ-005",
-      "title": "Environment Self-Check & CLI Verification Tool",
-      "description": "Expose a --doctor test runner to verify environment, API connectivity, audio decoding, and file processing directly in Termux/Android.",
+      "id": "REQ-4",
+      "title": "Voice Design & Custom Voice ID Support",
+      "description": "Allow creating custom voices from scratch via natural language description or entering an existing custom voice_id.",
       "priority": "P1",
-      "verification_criteria": "--doctor command returns 0 on healthy environment with diagnostic feedback."
+      "verification_criteria": "Custom voice ID is passed directly to voiceConfig.voice in Gemini API requests."
+    },
+    {
+      "id": "REQ-5",
+      "title": "Screen Reader Invariants",
+      "description": "Ensure every UI element has accessible labels, no wide tables, and polite live status announcements.",
+      "priority": "P0",
+      "verification_criteria": "Zero unlabeled elements and smooth TalkBack / Jieshuo navigation."
     }
   ],
   "entry_points": {
-    "run": "python3 /data/data/com.termux/files/home/gemini_audiobook_tts/gemini_audiobook_engine.py",
-    "test": "python3 /data/data/com.termux/files/home/gemini_audiobook_tts/test_engine.py",
-    "doctor": "python3 /data/data/com.termux/files/home/gemini_audiobook_tts/doctor.py",
+    "run": "com.antigravity.audiobook.MainActivity",
+    "test": "python3 -m unittest test_engine.py",
     "build": "./gradlew assembleDebug"
   }
 }

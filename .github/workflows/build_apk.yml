@@ -52,13 +52,17 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.0.4"
-          name: "Gemini Audiobook TTS v1.0.4 (APK)"
+          tag_name: "v1.1.0"
+          name: "Gemini Audiobook TTS v1.1.0 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - تحديث v1.0.4
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث الشامل v1.1.0
             
-            - اعتماد النموذج الجديد الرسمي `gemini-3.8-flash-tts` رسمياً كنموذج أساسي لتوليد الصوت.
-            - إزالة نموذج 2.0 المتقاعد نهائياً لتفادي خطأ 404 Not Found.
-            - أداء فائق وسرعة عالية في توليد فصول الكتب الصوتية.
+            - **واجهة عصرية بتصميم Material Design**: تبويبات سفلية متوافقة بالكامل مع قارئات الشاشة (TalkBack وقارئ الشاشة الصيني Jieshuo / CSR).
+            - **استوديو الأصوات المتقدم (Gemini 3.8 Flash TTS)**:
+              - دعم كامل لقائمة الـ 30 صوتاً رسمياً مع التوصيف الصوتي والنبرات.
+              - 4 أنماط إلقاء مخصصة (الوثائقي الرصين، الدرامي المشوق، الهادئ المريح، والطبيعي).
+              - ميزة **الحوار متعدد الرواة (Multi-Speaker Dialogue)** للقصص والروايات.
+              - ميزة **تصميم الأصوات من الصفر (Voice Design)** وتوليد أصوات مخصصة بالوصف النصي ومعاينتها مباشرة.
+            - **مشغل صوتي مخصص**: إمكانية التنقل بين الفصول، تقديم 30 ثانية وتأخير 15 ثانية والتحكم بالسرعة.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

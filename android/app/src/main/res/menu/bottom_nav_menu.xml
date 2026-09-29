@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/tab_library"
+        android:icon="@drawable/ic_nav_library"
+        android:title="@string/nav_library" />
+    <item
+        android:id="@+id/tab_player"
+        android:icon="@drawable/ic_nav_player"
+        android:title="@string/nav_player" />
+    <item
+        android:id="@+id/tab_studio"
+        android:icon="@drawable/ic_nav_studio"
+        android:title="@string/nav_studio" />
+    <item
+        android:id="@+id/tab_settings"
+        android:icon="@drawable/ic_nav_settings"
+        android:title="@string/nav_settings" />
+</menu>

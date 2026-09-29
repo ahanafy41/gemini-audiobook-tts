@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -15,6 +16,7 @@ import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
@@ -22,13 +24,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.antigravity.audiobook.data.GeminiTtsClient
+import com.antigravity.audiobook.domain.MultiSpeakerConfig
+import com.antigravity.audiobook.domain.VoiceProfile
+import com.antigravity.audiobook.domain.VoiceStylePreset
 import com.antigravity.audiobook.engine.AudiobookEngine
 import com.antigravity.audiobook.player.AudiobookPlayerService
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -51,17 +56,38 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         private const val PREFS_SETTINGS = "gemini_audiobook_settings"
         private const val KEY_API_KEY = "api_key"
         private const val KEY_GEMINI_VOICE = "gemini_voice"
-        private const val DEFAULT_GEMINI_VOICE = "Kore"
+        private const val KEY_VOICE_STYLE = "gemini_voice_style"
+        private const val KEY_MULTI_SPEAKER = "gemini_multi_speaker"
+        private const val KEY_CHARACTER_VOICE = "gemini_character_voice"
+        private const val KEY_MODEL_ID = "gemini_model_id"
+
+        private const val DEFAULT_NARRATOR_VOICE = "Charon"
+        private const val DEFAULT_CHARACTER_VOICE = "Kore"
+        private const val DEFAULT_STYLE_ID = "natural"
+        private const val DEFAULT_MODEL_ID = "gemini-3.8-flash-tts"
     }
 
-    private lateinit var btnAddBook: Button
-    private lateinit var btnSettings: Button
+    // Navigation and Tab Containers
+    private lateinit var bottomNav: BottomNavigationView
     private lateinit var textStatusLiveRegion: TextView
+    private lateinit var layoutTabLibrary: View
+    private lateinit var layoutTabPlayer: View
+    private lateinit var layoutTabStudio: View
+    private lateinit var layoutTabSettings: View
+
+    // Tab 1: Library Views
+    private lateinit var btnAddBook: Button
     private lateinit var listViewBooks: ListView
     private lateinit var textEmptyBooks: TextView
-
     private lateinit var textNowPlayingTitle: TextView
     private lateinit var textNowPlayingChapter: TextView
+    private lateinit var btnPlayPauseMini: Button
+    private lateinit var btnOpenFullPlayer: Button
+
+    // Tab 2: Full Player Views
+    private lateinit var textPlayerBookTitle: TextView
+    private lateinit var textPlayerChapterTitle: TextView
+    private lateinit var textPlayerProgress: TextView
     private lateinit var btnPrevChapter: Button
     private lateinit var btnRewind: Button
     private lateinit var btnPlayPause: Button
@@ -69,6 +95,21 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnNextChapter: Button
     private lateinit var btnSpeed: Button
 
+    // Tab 3: Voice Studio Views
+    private lateinit var btnSelectNarratorVoice: Button
+    private lateinit var btnSelectVoiceStyle: Button
+    private lateinit var btnToggleMultiSpeaker: Button
+    private lateinit var btnSelectCharacterVoice: Button
+    private lateinit var btnTestVoiceAudition: Button
+    private lateinit var btnCreateCustomVoice: Button
+
+    // Tab 4: Settings Views
+    private lateinit var textApiKeyStatus: TextView
+    private lateinit var btnEditApiKey: Button
+    private lateinit var btnTestApiKey: Button
+    private lateinit var btnSelectModel: Button
+
+    // State & Controllers
     private lateinit var settingsPrefs: SharedPreferences
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -95,20 +136,35 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         settingsPrefs = getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
         initViews()
+        setupBottomNavigation()
         setupListeners()
         initMediaController()
         refreshBooksList()
+        updateStudioUI()
+        updateSettingsUI()
     }
 
     private fun initViews() {
-        btnAddBook = findViewById(R.id.btnAddBook)
-        btnSettings = findViewById(R.id.btnSettings)
+        bottomNav = findViewById(R.id.bottomNav)
         textStatusLiveRegion = findViewById(R.id.textStatusLiveRegion)
+        layoutTabLibrary = findViewById(R.id.layoutTabLibrary)
+        layoutTabPlayer = findViewById(R.id.layoutTabPlayer)
+        layoutTabStudio = findViewById(R.id.layoutTabStudio)
+        layoutTabSettings = findViewById(R.id.layoutTabSettings)
+
+        // Library Views
+        btnAddBook = findViewById(R.id.btnAddBook)
         listViewBooks = findViewById(R.id.listViewBooks)
         textEmptyBooks = findViewById(R.id.textEmptyBooks)
-
         textNowPlayingTitle = findViewById(R.id.textNowPlayingTitle)
         textNowPlayingChapter = findViewById(R.id.textNowPlayingChapter)
+        btnPlayPauseMini = findViewById(R.id.btnPlayPauseMini)
+        btnOpenFullPlayer = findViewById(R.id.btnOpenFullPlayer)
+
+        // Full Player Views
+        textPlayerBookTitle = findViewById(R.id.textPlayerBookTitle)
+        textPlayerChapterTitle = findViewById(R.id.textPlayerChapterTitle)
+        textPlayerProgress = findViewById(R.id.textPlayerProgress)
         btnPrevChapter = findViewById(R.id.btnPrevChapter)
         btnRewind = findViewById(R.id.btnRewind)
         btnPlayPause = findViewById(R.id.btnPlayPause)
@@ -116,11 +172,61 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnNextChapter = findViewById(R.id.btnNextChapter)
         btnSpeed = findViewById(R.id.btnSpeed)
 
+        // Voice Studio Views
+        btnSelectNarratorVoice = findViewById(R.id.btnSelectNarratorVoice)
+        btnSelectVoiceStyle = findViewById(R.id.btnSelectVoiceStyle)
+        btnToggleMultiSpeaker = findViewById(R.id.btnToggleMultiSpeaker)
+        btnSelectCharacterVoice = findViewById(R.id.btnSelectCharacterVoice)
+        btnTestVoiceAudition = findViewById(R.id.btnTestVoiceAudition)
+        btnCreateCustomVoice = findViewById(R.id.btnCreateCustomVoice)
+
+        // Settings Views
+        textApiKeyStatus = findViewById(R.id.textApiKeyStatus)
+        btnEditApiKey = findViewById(R.id.btnEditApiKey)
+        btnTestApiKey = findViewById(R.id.btnTestApiKey)
+        btnSelectModel = findViewById(R.id.btnSelectModel)
+
         booksAdapter = BooksAdapter(this, booksList)
         listViewBooks.adapter = booksAdapter
     }
 
+    private fun setupBottomNavigation() {
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.tab_library -> {
+                    switchTab(layoutTabLibrary)
+                    announceStatus("تبويب المكتبة والكتب الصوتية")
+                    true
+                }
+                R.id.tab_player -> {
+                    switchTab(layoutTabPlayer)
+                    announceStatus("تبويب المشغل الصوتي الكامل")
+                    true
+                }
+                R.id.tab_studio -> {
+                    switchTab(layoutTabStudio)
+                    announceStatus("تبويب استوديو الأصوات وأنماط الإلقاء")
+                    true
+                }
+                R.id.tab_settings -> {
+                    switchTab(layoutTabSettings)
+                    announceStatus("تبويب إعدادات التطبيق")
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun switchTab(targetView: View) {
+        layoutTabLibrary.visibility = if (targetView == layoutTabLibrary) View.VISIBLE else View.GONE
+        layoutTabPlayer.visibility = if (targetView == layoutTabPlayer) View.VISIBLE else View.GONE
+        layoutTabStudio.visibility = if (targetView == layoutTabStudio) View.VISIBLE else View.GONE
+        layoutTabSettings.visibility = if (targetView == layoutTabSettings) View.VISIBLE else View.GONE
+    }
+
     private fun setupListeners() {
+        // Library Actions
         btnAddBook.setOnClickListener {
             try {
                 filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
@@ -130,10 +236,15 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             }
         }
 
-        btnSettings.setOnClickListener {
-            showSettingsDialog()
+        btnPlayPauseMini.setOnClickListener {
+            togglePlayPause()
         }
 
+        btnOpenFullPlayer.setOnClickListener {
+            bottomNav.selectedItemId = R.id.tab_player
+        }
+
+        // Full Player Controls
         btnPlayPause.setOnClickListener {
             togglePlayPause()
         }
@@ -180,6 +291,44 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             }
             true
         }
+
+        // Voice Studio Actions
+        btnSelectNarratorVoice.setOnClickListener {
+            showNarratorVoicePicker()
+        }
+
+        btnSelectVoiceStyle.setOnClickListener {
+            showVoiceStylePicker()
+        }
+
+        btnToggleMultiSpeaker.setOnClickListener {
+            toggleMultiSpeaker()
+        }
+
+        btnSelectCharacterVoice.setOnClickListener {
+            showCharacterVoicePicker()
+        }
+
+        btnTestVoiceAudition.setOnClickListener {
+            testCurrentAudition()
+        }
+
+        btnCreateCustomVoice.setOnClickListener {
+            showVoiceDesignDialog()
+        }
+
+        // Settings Actions
+        btnEditApiKey.setOnClickListener {
+            showApiKeyEditDialog()
+        }
+
+        btnTestApiKey.setOnClickListener {
+            testApiKeyConnection()
+        }
+
+        btnSelectModel.setOnClickListener {
+            showModelSelectionDialog()
+        }
     }
 
     private fun initMediaController() {
@@ -204,131 +353,322 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         textStatusLiveRegion.text = message
     }
 
-    private fun showSettingsDialog() {
-        var currentApiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        var currentGeminiVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_GEMINI_VOICE) ?: DEFAULT_GEMINI_VOICE
+    // -------------------------------------------------------------------------
+    // Voice Studio Management
+    // -------------------------------------------------------------------------
 
-        val context = this
-        val layout = android.widget.LinearLayout(context).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            val pad = (16 * resources.displayMetrics.density).toInt()
-            setPadding(pad, pad, pad, pad)
-        }
+    private fun updateStudioUI() {
+        val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
+        val narratorProfile = VoiceProfile.fromStoredString(narratorId)
+        btnSelectNarratorVoice.text = "صوت الراوي: ${narratorProfile.displayNameArabic}"
+        btnSelectNarratorVoice.contentDescription = "زر اختيار صوت الراوي الأساسي، المختار حالياً هو ${narratorProfile.displayNameArabic}"
 
-        // 1. API Key Input
-        val labelApiKey = TextView(context).apply {
-            text = "مفتاح Gemini API (إلزامي للتحويل بالذكاء الاصطناعي):"
-            textSize = 14f
-            setPadding(0, 0, 0, (4 * resources.displayMetrics.density).toInt())
-            contentDescription = "عنوان: مفتاح Gemini API"
-        }
-        val inputApiKey = EditText(context).apply {
-            hint = "أدخل مفتاح Gemini API الخاص بك"
-            setText(currentApiKey)
-            contentDescription = "حقل إدخال مفتاح Gemini API"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        layout.addView(labelApiKey)
-        layout.addView(inputApiKey)
+        val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
+        val stylePreset = VoiceStylePreset.fromId(styleId)
+        btnSelectVoiceStyle.text = "نمط الإلقاء: ${stylePreset.titleArabic}"
+        btnSelectVoiceStyle.contentDescription = "زر اختيار نمط الإلقاء الصوتي، النمط المختار هو ${stylePreset.titleArabic}"
 
-        // 2. Button for Gemini Cloud Voice selection
-        val btnSelectGeminiVoice = Button(context).apply {
-            text = "صوت الذكاء الاصطناعي: $currentGeminiVoice"
-            contentDescription = "زر اختيار صوت الذكاء الاصطناعي، الصوت المختار حالياً هو $currentGeminiVoice"
-            setOnClickListener {
-                showGeminiVoicePicker(currentGeminiVoice) { selected ->
-                    currentGeminiVoice = selected
-                    text = "صوت الذكاء الاصطناعي: $selected"
-                    contentDescription = "زر اختيار صوت الذكاء الاصطناعي، الصوت المختار حالياً هو $selected"
-                    announceStatus("تم اختيار صوت Gemini: $selected")
-                }
-            }
-        }
-        layout.addView(btnSelectGeminiVoice)
+        val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
+        btnToggleMultiSpeaker.text = if (isMultiSpeaker) "الحوار متعدد الرواة: مفعّل" else "الحوار متعدد الرواة: معطّل"
+        btnToggleMultiSpeaker.contentDescription = "زر تبديل الحوار متعدد الرواة، الحالة الحالية هي ${if (isMultiSpeaker) "مفعل" else "معطل"}"
+        btnSelectCharacterVoice.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
 
-        // 3. Button for Test Audio Voice
-        val btnTestVoice = Button(context).apply {
-            text = "تجربة صوت الذكاء الاصطناعي في السماعة (Test Voice)"
-            contentDescription = "زر تجربة وفحص صوت الذكاء الاصطناعي فوراً في السماعة"
-            setOnClickListener {
-                val enteredKey = inputApiKey.text.toString().trim()
-                testAudioVoice(enteredKey, currentGeminiVoice)
-            }
-        }
-        layout.addView(btnTestVoice)
-
-        val scrollView = android.widget.ScrollView(context).apply {
-            addView(layout)
-        }
-
-        AlertDialog.Builder(context)
-            .setTitle("إعدادات صوت الذكاء الاصطناعي (Gemini TTS)")
-            .setView(scrollView)
-            .setPositiveButton(R.string.action_save) { _, _ ->
-                val newKey = inputApiKey.text.toString().trim()
-                settingsPrefs.edit()
-                    .putString(KEY_API_KEY, newKey)
-                    .putString(KEY_GEMINI_VOICE, currentGeminiVoice)
-                    .apply()
-
-                val msg = if (newKey.isNotBlank()) {
-                    "تم حفظ إعدادات الذكاء الاصطناعي: صوت $currentGeminiVoice"
-                } else {
-                    "يرجى إدخال مفتاح Gemini API لتفعيل تحويل الكتب"
-                }
-                announceStatus(msg)
-                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
+        val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
+        val characterProfile = VoiceProfile.fromStoredString(characterId)
+        btnSelectCharacterVoice.text = "صوت الشخصيات: ${characterProfile.displayNameArabic}"
+        btnSelectCharacterVoice.contentDescription = "زر اختيار صوت الشخصيات والحوار، المختار حالياً هو ${characterProfile.displayNameArabic}"
     }
 
-    private fun showGeminiVoicePicker(currentSelected: String, onSelected: (String) -> Unit) {
-        val voices = GeminiTtsClient.APPROVED_VOICES.toTypedArray()
-        var selectedIdx = voices.indexOf(currentSelected)
+    private fun showNarratorVoicePicker() {
+        val voices = VoiceProfile.PREBUILT_VOICES
+        val displayItems = voices.map { "${it.displayNameArabic} (${it.descriptionArabic})" }.toTypedArray()
+        val currentVoiceId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
+        var selectedIdx = voices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
         if (selectedIdx < 0) selectedIdx = 0
 
         AlertDialog.Builder(this)
-            .setTitle("اختر صوت الذكاء الاصطناعي (Gemini Voice)")
-            .setSingleChoiceItems(voices, selectedIdx) { dialog, which ->
-                val chosenVoice = voices[which]
-                onSelected(chosenVoice)
+            .setTitle("اختر صوت الراوي الأساسي")
+            .setSingleChoiceItems(displayItems, selectedIdx) { dialog, which ->
+                val chosen = voices[which]
+                settingsPrefs.edit().putString(KEY_GEMINI_VOICE, chosen.id).apply()
+                updateStudioUI()
+                announceStatus("تم اختيار صوت الراوي: ${chosen.displayNameArabic}")
                 dialog.dismiss()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
-    private fun testAudioVoice(apiKey: String, geminiVoice: String) {
-        val trimmedKey = apiKey.trim()
-        if (trimmedKey.isBlank() || trimmedKey.length < 15) {
-            announceStatus("يرجى إدخال مفتاح Gemini API أولاً لتجربة الصوت!")
-            Toast.makeText(this, "يرجى إدخال مفتاح Gemini API أولاً", Toast.LENGTH_SHORT).show()
+    private fun showCharacterVoicePicker() {
+        val voices = VoiceProfile.PREBUILT_VOICES
+        val displayItems = voices.map { "${it.displayNameArabic} (${it.descriptionArabic})" }.toTypedArray()
+        val currentVoiceId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
+        var selectedIdx = voices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
+        if (selectedIdx < 0) selectedIdx = 1
+
+        AlertDialog.Builder(this)
+            .setTitle("اختر صوت شخصيات الحوار")
+            .setSingleChoiceItems(displayItems, selectedIdx) { dialog, which ->
+                val chosen = voices[which]
+                settingsPrefs.edit().putString(KEY_CHARACTER_VOICE, chosen.id).apply()
+                updateStudioUI()
+                announceStatus("تم اختيار صوت الشخصيات: ${chosen.displayNameArabic}")
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun showVoiceStylePicker() {
+        val styles = VoiceStylePreset.entries.toTypedArray()
+        val displayItems = styles.map { "${it.titleArabic}: ${it.descriptionArabic}" }.toTypedArray()
+        val currentStyleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
+        var selectedIdx = styles.indexOfFirst { it.id.equals(currentStyleId, ignoreCase = true) }
+        if (selectedIdx < 0) selectedIdx = 0
+
+        AlertDialog.Builder(this)
+            .setTitle("اختر نمط الإلقاء الصوتي")
+            .setSingleChoiceItems(displayItems, selectedIdx) { dialog, which ->
+                val chosen = styles[which]
+                settingsPrefs.edit().putString(KEY_VOICE_STYLE, chosen.id).apply()
+                updateStudioUI()
+                announceStatus("تم اختيار نمط الإلقاء: ${chosen.titleArabic}")
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun toggleMultiSpeaker() {
+        val current = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
+        val updated = !current
+        settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, updated).apply()
+        updateStudioUI()
+        announceStatus(if (updated) "تم تفعيل الحوار متعدد الرواة" else "تم تعطيل الحوار متعدد الرواة")
+    }
+
+    private fun testCurrentAudition() {
+        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        if (apiKey.isBlank() || apiKey.length < 15) {
+            announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
+            Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
+            bottomNav.selectedItemId = R.id.tab_settings
             return
         }
 
-        announceStatus("جارِ تجربة صوت الذكاء الاصطناعي ($geminiVoice)...")
+        val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
+        val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
+        val stylePreset = VoiceStylePreset.fromId(styleId)
+        val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
+        val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
+        val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+
+        announceStatus("جارِ توليد عينة صوتية بالذكاء الاصطناعي...")
         lifecycleScope.launch {
             try {
-                val client = GeminiTtsClient(apiKey = trimmedKey)
+                val client = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
                 val audioData = withContext(Dispatchers.IO) {
-                    client.synthesize("مرحباً يا أحمد، هذا فحص واختبار صوت جيميني بالذكاء الاصطناعي.", voiceName = geminiVoice)
+                    if (isMultiSpeaker) {
+                        val multiConfig = MultiSpeakerConfig(
+                            isEnabled = true,
+                            narratorVoice = VoiceProfile.fromStoredString(narratorId),
+                            characterVoice = VoiceProfile.fromStoredString(characterId)
+                        )
+                        val text = "قال الراوي بصوت وقور ومدروس: «أهلاً بكم في عالم الكتب الصوتية الذكية». فأصغى الجميع في اهتمام."
+                        client.synthesize(text, voiceName = narratorId, stylePreset = stylePreset, multiSpeakerConfig = multiConfig)
+                    } else {
+                        val text = "مرحباً يا أحمد، هذا فحص واختبار لصوت جيميني بالذكاء الاصطناعي بنمط ${stylePreset.titleArabic}."
+                        client.synthesize(text, voiceName = narratorId, stylePreset = stylePreset)
+                    }
                 }
-                val previewFile = File(cacheDir, "preview_gemini.wav")
+                val previewFile = File(cacheDir, "audition_test.wav")
                 client.saveAudioAtomically(previewFile, audioData)
                 playAudioFileDirectly(previewFile)
-                announceStatus("تم تشغيل صوت الذكاء الاصطناعي بنجاح: $geminiVoice")
+                announceStatus("تم تشغيل المعاينة الصوتية بنجاح")
             } catch (e: Exception) {
-                Log.e(TAG, "Gemini preview failed: ${e.message}")
+                Log.e(TAG, "Audition test failed: ${e.message}")
                 announceStatus("فشل توليد الصوت: ${e.localizedMessage ?: e.message}")
                 Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
 
+    private fun showVoiceDesignDialog() {
+        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        if (apiKey.isBlank() || apiKey.length < 15) {
+            announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
+            Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
+            bottomNav.selectedItemId = R.id.tab_settings
+            return
+        }
+
+        val context = this
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val inputName = EditText(context).apply {
+            hint = getString(R.string.dialog_voice_design_name_hint)
+            contentDescription = "اسم الصوت الجديد"
+        }
+        val inputPrompt = EditText(context).apply {
+            hint = getString(R.string.dialog_voice_design_prompt_hint)
+            contentDescription = "وصف النبرة بالإنجليزية"
+            minLines = 3
+        }
+
+        layout.addView(TextView(context).apply {
+            text = "اسم الصوت:"
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(context, R.color.text_high_contrast))
+        })
+        layout.addView(inputName)
+        layout.addView(TextView(context).apply {
+            text = "وصف الصوت (باللغة الإنجليزية):"
+            textSize = 14f
+            setTextColor(ContextCompat.getColor(context, R.color.text_high_contrast))
+            setPadding(0, (12 * resources.displayMetrics.density).toInt(), 0, 0)
+        })
+        layout.addView(inputPrompt)
+
+        AlertDialog.Builder(context)
+            .setTitle(R.string.dialog_voice_design_title)
+            .setView(layout)
+            .setPositiveButton(R.string.btn_generate_voice) { _, _ ->
+                val name = inputName.text.toString().trim()
+                val prompt = inputPrompt.text.toString().trim()
+                if (name.isBlank() || prompt.isBlank()) {
+                    Toast.makeText(context, "يرجى إدخال اسم الصوت ووصفه", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                announceStatus("جارِ تصميم الصوت الجديد بالذكاء الاصطناعي...")
+                lifecycleScope.launch {
+                    try {
+                        val client = GeminiTtsClient(apiKey = apiKey)
+                        val (voiceId, sampleBytes) = client.createCustomVoice(name, prompt)
+                        settingsPrefs.edit().putString(KEY_GEMINI_VOICE, voiceId).apply()
+                        updateStudioUI()
+                        announceStatus("تم إنشاء الصوت بنجاح بمعرف: $voiceId")
+                        Toast.makeText(context, "تم حفظ وتفعيل الصوت المخصص!", Toast.LENGTH_SHORT).show()
+
+                        sampleBytes?.let { bytes ->
+                            val sampleFile = File(cacheDir, "sample_designed_$voiceId.wav")
+                            client.saveAudioAtomically(sampleFile, bytes)
+                            playAudioFileDirectly(sampleFile)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Voice design creation failed: ${e.message}")
+                        announceStatus("تعذر تصميم الصوت: ${e.localizedMessage ?: e.message}")
+                        Toast.makeText(context, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    // -------------------------------------------------------------------------
+    // Settings Tab Management
+    // -------------------------------------------------------------------------
+
+    private fun updateSettingsUI() {
+        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        if (apiKey.isNotBlank() && apiKey.length >= 15) {
+            val masked = "${apiKey.take(6)}...${apiKey.takeLast(4)}"
+            textApiKeyStatus.text = "المفتاح مسجل ونشط: $masked"
+            textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+        } else {
+            textApiKeyStatus.text = "المفتاح غير مسجل، يرجى إدخال مفتاح Gemini API لتفعيل التحويل"
+            textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+        }
+
+        val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        btnSelectModel.text = "النموذج المعتمد: $modelId"
+    }
+
+    private fun showApiKeyEditDialog() {
+        val currentKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        val input = EditText(this).apply {
+            hint = "أدخل مفتاح Gemini API الخاص بك"
+            setText(currentKey)
+            contentDescription = "حقل إدخال مفتاح Gemini API"
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_enter_api_key)
+            .setView(input)
+            .setPositiveButton(R.string.action_save) { _, _ ->
+                val newKey = input.text.toString().trim()
+                settingsPrefs.edit().putString(KEY_API_KEY, newKey).apply()
+                updateSettingsUI()
+                announceStatus("تم حفظ مفتاح Gemini API بنجاح")
+                Toast.makeText(this, "تم حفظ المفتاح", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun testApiKeyConnection() {
+        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        if (apiKey.isBlank() || apiKey.length < 15) {
+            announceStatus("يرجى إدخال مفتاح Gemini API أولاً لفحصه")
+            Toast.makeText(this, "المفتاح غير مسجل بعد", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        announceStatus("جارِ فحص الاتصال بمفتاح Gemini API...")
+        lifecycleScope.launch {
+            try {
+                val client = GeminiTtsClient(apiKey = apiKey)
+                val testAudio = withContext(Dispatchers.IO) {
+                    client.synthesize("فحص الاتصال ناجح، المفتاح يعمل بكفاءة.", voiceName = "Charon")
+                }
+                if (testAudio.size > 1000) {
+                    val previewFile = File(cacheDir, "test_conn.wav")
+                    client.saveAudioAtomically(previewFile, testAudio)
+                    playAudioFileDirectly(previewFile)
+                    announceStatus("الاتصال ناجح تماماً! المفتاح صالح ومستعد لتوليد الكتب الصوتية.")
+                    Toast.makeText(this@MainActivity, "الاتصال ناجح ومفتاحك فعال 100%", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "API Connection test failed: ${e.message}")
+                announceStatus("فشل فحص الاتصال: ${e.localizedMessage ?: e.message}")
+                Toast.makeText(this@MainActivity, "خطأ في المفتاح: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun showModelSelectionDialog() {
+        val models = arrayOf("gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts")
+        val currentModel = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        var selectedIdx = models.indexOf(currentModel)
+        if (selectedIdx < 0) selectedIdx = 0
+
+        AlertDialog.Builder(this)
+            .setTitle("اختر نموذج الذكاء الاصطناعي")
+            .setSingleChoiceItems(models, selectedIdx) { dialog, which ->
+                val chosen = models[which]
+                settingsPrefs.edit().putString(KEY_MODEL_ID, chosen).apply()
+                updateSettingsUI()
+                announceStatus("تم اعتماد النموذج: $chosen")
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    // -------------------------------------------------------------------------
+    // Audio Playback & Book Management
+    // -------------------------------------------------------------------------
+
     private fun playAudioFileDirectly(file: File) {
         try {
-            android.media.MediaPlayer().apply {
+            MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 prepare()
                 start()
@@ -339,10 +679,6 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         } catch (e: Exception) {
             Log.e(TAG, "Error playing audio file: ${e.message}")
         }
-    }
-
-    private fun showApiKeyDialog() {
-        showSettingsDialog()
     }
 
     private fun showDeleteConfirmation(book: BookItem) {
@@ -447,26 +783,42 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 }
 
                 val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-                val geminiVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_GEMINI_VOICE) ?: DEFAULT_GEMINI_VOICE
+                val narratorVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
+                val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
+                val stylePreset = VoiceStylePreset.fromId(styleId)
+                val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
+                val characterVoice = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
+                val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
 
                 if (apiKey.isBlank() || apiKey.length < 15) {
                     announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لتحويل الكتاب بالذكاء الاصطناعي")
                     Toast.makeText(this@MainActivity, "يرجى إدخال مفتاح Gemini API أولاً في الإعدادات", Toast.LENGTH_LONG).show()
-                    showSettingsDialog()
+                    bottomNav.selectedItemId = R.id.tab_settings
                     return@launch
                 }
 
                 val bookTitle = tempFile.nameWithoutExtension.ifBlank { "كتاب صوتي" }
                 val bookDir = File(File(filesDir, "audiobooks"), bookTitle)
-                val ttsClient = GeminiTtsClient(apiKey = apiKey)
+                val ttsClient = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+
+                val multiConfig = if (isMultiSpeaker) {
+                    MultiSpeakerConfig(
+                        isEnabled = true,
+                        narratorVoice = VoiceProfile.fromStoredString(narratorVoice),
+                        characterVoice = VoiceProfile.fromStoredString(characterVoice)
+                    )
+                } else null
+
                 val engine = AudiobookEngine(
                     context = this@MainActivity,
                     outputDir = bookDir,
                     ttsClient = ttsClient,
-                    voiceName = geminiVoice
+                    voiceName = narratorVoice,
+                    stylePreset = stylePreset,
+                    multiSpeakerConfig = multiConfig
                 )
 
-                announceStatus("جارِ تحويل فصول الكتاب عبر الذكاء الاصطناعي Gemini TTS (صوت: $geminiVoice)...")
+                announceStatus("جارِ تحويل فصول الكتاب عبر الذكاء الاصطناعي Gemini TTS (نمط: ${stylePreset.titleArabic})...")
 
                 withContext(Dispatchers.IO) {
                     engine.processBook(tempFile) { current, total, title ->
@@ -482,7 +834,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             } catch (e: Exception) {
                 Log.e(TAG, "Error importing book: ${e.message}", e)
                 refreshBooksList()
-                announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة ويمكنك تشغيلها أو استئناف الباقي.")
+                announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
                 Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
             }
         }
@@ -534,6 +886,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         textNowPlayingTitle.text = book.title
         textNowPlayingChapter.text = chapterTitle
+        textPlayerBookTitle.text = book.title
+        textPlayerChapterTitle.text = chapterTitle
+        textPlayerProgress.text = "فصل $chapterIndex من أصل ${chapters.length()}"
+
         announceStatus("تشغيل: ${book.title} - $chapterTitle")
         updatePlayPauseButton(true)
 
@@ -612,7 +968,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean) {
-        btnPlayPause.text = if (isPlaying) getString(R.string.action_pause) else getString(R.string.action_play)
+        val playText = if (isPlaying) getString(R.string.action_pause) else getString(R.string.action_play)
+        btnPlayPause.text = playText
+        btnPlayPauseMini.text = playText
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {

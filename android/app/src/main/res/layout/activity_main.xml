@@ -1,202 +1,593 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_dark"
-    android:padding="16dp">
+    android:background="@color/bg_dark">
 
-    <!-- Top Accessible Header with Primary Actions -->
-    <LinearLayout
-        android:id="@+id/headerLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        app:layout_constraintTop_toTopOf="parent">
-
-        <TextView
-            android:id="@+id/appTitle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/app_name"
-            android:textColor="@color/primary_accessible"
-            android:textSize="22sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btnSettings"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:minWidth="48dp"
-            android:text="@string/action_settings"
-            android:contentDescription="@string/action_settings"
-            android:textColor="@color/on_primary"
-            android:backgroundTint="@color/primary_accessible"
-            android:layout_marginEnd="8dp" />
-
-        <Button
-            android:id="@+id/btnAddBook"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:minWidth="48dp"
-            android:text="@string/action_add_book"
-            android:contentDescription="@string/action_add_book"
-            android:textColor="@color/on_primary"
-            android:backgroundTint="@color/primary_accessible" />
-
-    </LinearLayout>
-
-    <!-- Status & Accessibility Live Region -->
+    <!-- Live Region for Screen Readers (Always accessible across all tabs) -->
     <TextView
         android:id="@+id/textStatusLiveRegion"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:accessibilityLiveRegion="polite"
         android:text="@string/status_ready"
         android:textColor="@color/accent_control"
         android:textSize="14sp"
-        app:layout_constraintTop_toBottomOf="@id/headerLayout" />
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp"
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Books List -->
-    <ListView
-        android:id="@+id/listViewBooks"
+    <!-- Container for All 4 Tab Layouts -->
+    <FrameLayout
+        android:id="@+id/tabContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp"
-        android:divider="@color/divider_color"
-        android:dividerHeight="1dp"
         app:layout_constraintTop_toBottomOf="@id/textStatusLiveRegion"
-        app:layout_constraintBottom_toTopOf="@id/miniPlayerLayout" />
+        app:layout_constraintBottom_toTopOf="@id/bottomNav">
 
-    <!-- Empty State Text -->
-    <TextView
-        android:id="@+id/textEmptyBooks"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:padding="24dp"
-        android:text="@string/label_no_books"
-        android:textColor="@color/text_secondary"
-        android:textSize="18sp"
-        app:layout_constraintTop_toTopOf="@id/listViewBooks"
-        app:layout_constraintBottom_toBottomOf="@id/listViewBooks" />
+        <!-- ==================== TAB 1: LIBRARY ==================== -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/layoutTabLibrary"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="16dp"
+            android:visibility="visible">
 
-    <!-- Mini-Player Bar (Fixed at Bottom with 48dp+ Targets) -->
-    <LinearLayout
-        android:id="@+id/miniPlayerLayout"
+            <!-- Library Header -->
+            <LinearLayout
+                android:id="@+id/libraryHeaderLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <TextView
+                    android:id="@+id/appTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/title_my_books"
+                    android:textColor="@color/primary_accessible"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnAddBook"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:minWidth="48dp"
+                    android:text="@string/action_add_book"
+                    android:contentDescription="@string/action_add_book"
+                    android:textColor="@color/on_primary"
+                    android:backgroundTint="@color/primary_accessible" />
+
+            </LinearLayout>
+
+            <!-- Books List -->
+            <ListView
+                android:id="@+id/listViewBooks"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="8dp"
+                android:divider="@color/divider_color"
+                android:dividerHeight="1dp"
+                app:layout_constraintTop_toBottomOf="@id/libraryHeaderLayout"
+                app:layout_constraintBottom_toTopOf="@id/miniPlayerLayout" />
+
+            <!-- Empty State Text -->
+            <TextView
+                android:id="@+id/textEmptyBooks"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:padding="24dp"
+                android:text="@string/label_no_books"
+                android:textColor="@color/text_secondary"
+                android:textSize="18sp"
+                app:layout_constraintTop_toTopOf="@id/listViewBooks"
+                app:layout_constraintBottom_toBottomOf="@id/listViewBooks" />
+
+            <!-- Mini Player Bar at bottom of Library -->
+            <LinearLayout
+                android:id="@+id/miniPlayerLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/surface_dark"
+                android:padding="12dp"
+                app:layout_constraintBottom_toBottomOf="parent">
+
+                <TextView
+                    android:id="@+id/textNowPlayingTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="لا يوجد كتاب قيد التشغيل حالياً"
+                    android:textColor="@color/text_high_contrast"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/textNowPlayingChapter"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="اختر كتاباً من القائمة لبدء الاستماع"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <Button
+                        android:id="@+id/btnPlayPauseMini"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="48dp"
+                        android:text="@string/action_play"
+                        android:contentDescription="@string/action_play"
+                        android:textColor="@color/on_primary"
+                        android:backgroundTint="@color/primary_accessible" />
+
+                    <Button
+                        android:id="@+id/btnOpenFullPlayer"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1.2"
+                        android:minHeight="48dp"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/btn_open_full_player"
+                        android:contentDescription="@string/btn_open_full_player"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <!-- ==================== TAB 2: FULL PLAYER ==================== -->
+        <ScrollView
+            android:id="@+id/layoutTabPlayer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="20dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="مشغل الكتب الصوتية"
+                    android:textColor="@color/primary_accessible"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <!-- Now Playing Card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@color/surface_dark"
+                    android:padding="20dp"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:id="@+id/textPlayerBookTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="لم يتم تحديد كتاب"
+                        android:textColor="@color/text_high_contrast"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/textPlayerChapterTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="اختر كتاباً من تبويب المكتبة"
+                        android:textColor="@color/accent_control"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textPlayerProgress"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:text="00:00 / 00:00"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+
+                <!-- Full Playback Controls (48dp+ accessibility targets) -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="24dp">
+
+                    <Button
+                        android:id="@+id/btnPrevChapter"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="52dp"
+                        android:text="السابق"
+                        android:contentDescription="@string/action_prev_chapter"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                    <Button
+                        android:id="@+id/btnRewind"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="52dp"
+                        android:layout_marginStart="6dp"
+                        android:text="-15ث"
+                        android:contentDescription="@string/action_rewind"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                    <Button
+                        android:id="@+id/btnPlayPause"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1.5"
+                        android:minHeight="60dp"
+                        android:layout_marginStart="6dp"
+                        android:text="@string/action_play"
+                        android:contentDescription="@string/action_play"
+                        android:textStyle="bold"
+                        android:textSize="18sp"
+                        android:textColor="@color/on_primary"
+                        android:backgroundTint="@color/primary_accessible" />
+
+                    <Button
+                        android:id="@+id/btnFastForward"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="52dp"
+                        android:layout_marginStart="6dp"
+                        android:text="+30ث"
+                        android:contentDescription="@string/action_fast_forward"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                    <Button
+                        android:id="@+id/btnNextChapter"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="52dp"
+                        android:layout_marginStart="6dp"
+                        android:text="التالي"
+                        android:contentDescription="@string/action_next_chapter"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                </LinearLayout>
+
+                <!-- Speed Control -->
+                <Button
+                    android:id="@+id/btnSpeed"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/action_speed"
+                    android:contentDescription="تغيير سرعة القراءة الصوتية"
+                    android:textColor="@color/accent_control"
+                    android:backgroundTint="@color/surface_dark" />
+
+            </LinearLayout>
+
+        </ScrollView>
+
+        <!-- ==================== TAB 3: VOICE STUDIO ==================== -->
+        <ScrollView
+            android:id="@+id/layoutTabStudio"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="20dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/title_studio"
+                    android:textColor="@color/primary_accessible"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/desc_studio"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <!-- 1. Narrator Voice Selector -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/label_narrator_voice"
+                    android:textColor="@color/text_high_contrast"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnSelectNarratorVoice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="6dp"
+                    android:text="صوت الراوي: شارون (Charon)"
+                    android:contentDescription="زر اختيار صوت الراوي الأساسي"
+                    android:textColor="@color/text_high_contrast"
+                    android:backgroundTint="@color/surface_dark" />
+
+                <!-- 2. Voice Style Preset Selector -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/label_voice_style"
+                    android:textColor="@color/text_high_contrast"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnSelectVoiceStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="6dp"
+                    android:text="النمط: طبيعي ومتوازن (افتراضي)"
+                    android:contentDescription="زر اختيار نمط الإلقاء الصوتي"
+                    android:textColor="@color/text_high_contrast"
+                    android:backgroundTint="@color/surface_dark" />
+
+                <!-- 3. Multi-Speaker Dialogue Section -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="24dp"
+                    android:text="@string/label_multi_speaker"
+                    android:textColor="@color/text_high_contrast"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/desc_multi_speaker"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnToggleMultiSpeaker"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="8dp"
+                    android:text="الحوار متعدد الرواة: معطل"
+                    android:contentDescription="تبديل حالة الحوار متعدد الرواة"
+                    android:textColor="@color/accent_control"
+                    android:backgroundTint="@color/surface_dark" />
+
+                <Button
+                    android:id="@+id/btnSelectCharacterVoice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone"
+                    android:text="صوت الشخصيات: كوري (Kore)"
+                    android:contentDescription="زر اختيار صوت شخصيات الحوار"
+                    android:textColor="@color/text_high_contrast"
+                    android:backgroundTint="@color/surface_dark" />
+
+                <!-- 4. Audition & Voice Design Buttons -->
+                <Button
+                    android:id="@+id/btnTestVoiceAudition"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="24dp"
+                    android:text="@string/btn_test_voice_audition"
+                    android:contentDescription="@string/btn_test_voice_audition"
+                    android:textColor="@color/on_primary"
+                    android:backgroundTint="@color/primary_accessible" />
+
+                <Button
+                    android:id="@+id/btnCreateCustomVoice"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/btn_create_custom_voice"
+                    android:contentDescription="@string/btn_create_custom_voice"
+                    android:textColor="@color/accent_control"
+                    android:backgroundTint="@color/surface_dark" />
+
+            </LinearLayout>
+
+        </ScrollView>
+
+        <!-- ==================== TAB 4: SETTINGS ==================== -->
+        <ScrollView
+            android:id="@+id/layoutTabSettings"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="20dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/title_settings_full"
+                    android:textColor="@color/primary_accessible"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <!-- API Key Section -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@color/surface_dark"
+                    android:padding="16dp"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_api_key_status"
+                        android:textColor="@color/text_high_contrast"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/textApiKeyStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="جاري التحقق من المفتاح..."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="14sp" />
+
+                    <Button
+                        android:id="@+id/btnEditApiKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:layout_marginTop="12dp"
+                        android:text="@string/btn_update_api_key"
+                        android:contentDescription="@string/btn_update_api_key"
+                        android:textColor="@color/on_primary"
+                        android:backgroundTint="@color/primary_accessible" />
+
+                    <Button
+                        android:id="@+id/btnTestApiKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/btn_test_api_connection"
+                        android:contentDescription="@string/btn_test_api_connection"
+                        android:textColor="@color/accent_control"
+                        android:backgroundTint="@color/divider_color" />
+
+                </LinearLayout>
+
+                <!-- Model Selection Section -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@color/surface_dark"
+                    android:padding="16dp"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_model_selection"
+                        android:textColor="@color/text_high_contrast"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <Button
+                        android:id="@+id/btnSelectModel"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:layout_marginTop="8dp"
+                        android:text="النموذج: gemini-3.8-flash-tts"
+                        android:contentDescription="زر اختيار نموذج الذكاء الاصطناعي"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                </LinearLayout>
+
+                <!-- Accessibility Notes Card -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@color/surface_dark"
+                    android:padding="16dp"
+                    android:layout_marginTop="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_accessibility_notes"
+                        android:textColor="@color/primary_accessible"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/desc_accessibility_notes"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="14sp"
+                        android:lineSpacingExtra="4dp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </ScrollView>
+
+    </FrameLayout>
+
+    <!-- Bottom Navigation Bar (Material Design) -->
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNav"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:layout_height="64dp"
         android:background="@color/surface_dark"
-        android:padding="12dp"
-        app:layout_constraintBottom_toBottomOf="parent">
-
-        <TextView
-            android:id="@+id/textNowPlayingTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="لا يوجد كتاب قيد التشغيل حالياً"
-            android:textColor="@color/text_high_contrast"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/textNowPlayingChapter"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="اختر كتاباً من القائمة أعلاه لبدء الاستماع"
-            android:textColor="@color/text_secondary"
-            android:textSize="14sp" />
-
-        <!-- Accessible Playback Controls with 48dp+ targets -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginTop="12dp">
-
-            <Button
-                android:id="@+id/btnPrevChapter"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:minHeight="48dp"
-                android:text="السابق"
-                android:contentDescription="@string/action_prev_chapter"
-                android:textColor="@color/text_high_contrast"
-                android:backgroundTint="@color/divider_color" />
-
-            <Button
-                android:id="@+id/btnRewind"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:minHeight="48dp"
-                android:layout_marginStart="4dp"
-                android:text="-15ث"
-                android:contentDescription="@string/action_rewind"
-                android:textColor="@color/text_high_contrast"
-                android:backgroundTint="@color/divider_color" />
-
-            <Button
-                android:id="@+id/btnPlayPause"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1.4"
-                android:minHeight="56dp"
-                android:layout_marginStart="4dp"
-                android:text="@string/action_play"
-                android:contentDescription="@string/action_play"
-                android:textStyle="bold"
-                android:textColor="@color/on_primary"
-                android:backgroundTint="@color/primary_accessible" />
-
-            <Button
-                android:id="@+id/btnFastForward"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:minHeight="48dp"
-                android:layout_marginStart="4dp"
-                android:text="+30ث"
-                android:contentDescription="@string/action_fast_forward"
-                android:textColor="@color/text_high_contrast"
-                android:backgroundTint="@color/divider_color" />
-
-            <Button
-                android:id="@+id/btnNextChapter"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:minHeight="48dp"
-                android:layout_marginStart="4dp"
-                android:text="التالي"
-                android:contentDescription="@string/action_next_chapter"
-                android:textColor="@color/text_high_contrast"
-                android:backgroundTint="@color/divider_color" />
-
-        </LinearLayout>
-
-        <!-- Speed control button -->
-        <Button
-            android:id="@+id/btnSpeed"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:layout_marginTop="8dp"
-            android:text="@string/action_speed"
-            android:contentDescription="تغيير سرعة القراءة الصوتية"
-            android:textColor="@color/accent_control"
-            android:backgroundTint="@color/surface_dark" />
-
-    </LinearLayout>
+        app:itemIconTint="@color/nav_item_color"
+        app:itemTextColor="@color/nav_item_color"
+        app:menu="@menu/bottom_nav_menu"
+        app:labelVisibilityMode="labeled"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

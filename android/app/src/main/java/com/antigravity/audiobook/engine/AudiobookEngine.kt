@@ -5,8 +5,10 @@ import android.util.Log
 import com.antigravity.audiobook.data.GeminiTtsClient
 import com.antigravity.audiobook.domain.BookParser
 import com.antigravity.audiobook.domain.CleanedChapter
+import com.antigravity.audiobook.domain.MultiSpeakerConfig
 import com.antigravity.audiobook.domain.ParsedBook
 import com.antigravity.audiobook.domain.SmartTextChunker
+import com.antigravity.audiobook.domain.VoiceStylePreset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -20,14 +22,16 @@ import java.nio.ByteOrder
 /**
  * Android Audiobook Engine powered purely by Google Gemini AI TTS.
  * Converts books (.md or .txt) into multi-chapter audiobooks with resume caching.
- * Uses Gemini Flash TTS with prebuilt high-fidelity neural voices.
+ * Uses Gemini Flash TTS with prebuilt high-fidelity neural voices, style presets,
+ * and multi-speaker dialogue synthesis.
  */
 class AudiobookEngine(
     private val context: Context,
     private val outputDir: File,
     private val ttsClient: GeminiTtsClient,
-    private val voiceName: String = "Kore",
-    private val deliveryStyle: String = "narrator, natural pacing"
+    private val voiceName: String = "Charon",
+    private val stylePreset: VoiceStylePreset = VoiceStylePreset.NATURAL,
+    private val multiSpeakerConfig: MultiSpeakerConfig? = null
 ) {
 
     companion object {
@@ -102,7 +106,12 @@ class AudiobookEngine(
                     }
 
                     try {
-                        val audioData = ttsClient.synthesize(chunkText, voiceName, deliveryStyle)
+                        val audioData = ttsClient.synthesize(
+                            text = chunkText,
+                            voiceName = voiceName,
+                            stylePreset = stylePreset,
+                            multiSpeakerConfig = multiSpeakerConfig
+                        )
                         if (audioData.size > 1000) {
                             ttsClient.saveAudioAtomically(chunkFile, audioData)
                             synthesizedNetwork = true

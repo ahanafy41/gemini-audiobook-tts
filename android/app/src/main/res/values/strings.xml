@@ -22,4 +22,37 @@
     <string name="confirm_delete_title">حذف الكتاب</string>
     <string name="confirm_delete_msg">هل تريد حذف هذا الكتاب وملفاته الصوتية؟</string>
     <string name="action_delete">حذف</string>
+
+    <!-- Bottom Navigation Tabs -->
+    <string name="nav_library">المكتبة</string>
+    <string name="nav_player">المشغل</string>
+    <string name="nav_studio">الأصوات</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Voice Studio -->
+    <string name="title_studio">استوديو الأصوات (Gemini 3.8)</string>
+    <string name="desc_studio">تخصيص أصوات الرواة، أنماط الإلقاء، والحوار متعدد الأصوات</string>
+    <string name="label_narrator_voice">صوت الراوي الأساسي</string>
+    <string name="label_voice_style">نمط الإلقاء الصوتي (Style)</string>
+    <string name="label_multi_speaker">تفعيل الرواية والحوار المتعدد (Multi-Speaker)</string>
+    <string name="desc_multi_speaker">يفرز نصوص الحوار بين علامات التنصيص بصوت منفصل عن الراوي</string>
+    <string name="label_character_voice">صوت الشخصيات والحوار</string>
+    <string name="btn_create_custom_voice">تصميم صوت مخصص بالذكاء الاصطناعي (Voice Design)</string>
+    <string name="btn_test_voice_audition">تجربة ومعاينة الصوت الحالي</string>
+    <string name="btn_open_full_player">الانتقال للمشغل الكامل</string>
+
+    <!-- Voice Design Dialog -->
+    <string name="dialog_voice_design_title">تصميم صوت جديد من الصفر</string>
+    <string name="dialog_voice_design_name_hint">اسم الصوت (مثال: راوٍ مصري رصين)</string>
+    <string name="dialog_voice_design_prompt_hint">أدخل وصف النبرة بالإنجليزية (مثال: Calm, deep resonant baritone, authoritative yet warm Egyptian accent)</string>
+    <string name="btn_generate_voice">توليد ومعاينة الصوت</string>
+
+    <!-- Settings Tab -->
+    <string name="title_settings_full">إعدادات النظام والنموذج</string>
+    <string name="label_api_key_status">حالة مفتاح Gemini API</string>
+    <string name="btn_update_api_key">تعديل مفتاح API</string>
+    <string name="btn_test_api_connection">فحص الاتصال بالمفتاح</string>
+    <string name="label_model_selection">نموذج الذكاء الاصطناعي</string>
+    <string name="label_accessibility_notes">إمكانية الوصول وقارئات الشاشة (TalkBack و Jieshuo)</string>
+    <string name="desc_accessibility_notes">تم تصميم هذا التطبيق بالكامل وفق أعلى معايير إمكانية الوصول للمكفوفين: شاشات ميسرة، أبعاد لمس قياسية 48dp+، أزرار واضحة التسمية، وتوافق تام مع TalkBack وقارئ الشاشة الصيني Jieshuo / CSR.</string>
 </resources>

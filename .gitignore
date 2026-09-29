@@ -19,3 +19,4 @@ raw_chunks/
 *.tmp
 .backups/
 debug_manifest.json
+*.wav

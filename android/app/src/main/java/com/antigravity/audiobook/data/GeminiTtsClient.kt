@@ -11,6 +11,10 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import com.antigravity.audiobook.domain.DialogueTurnAnnotator
+import com.antigravity.audiobook.domain.MultiSpeakerConfig
+import com.antigravity.audiobook.domain.VoiceProfile
+import com.antigravity.audiobook.domain.VoiceStylePreset
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -19,9 +23,9 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.sin
 
 /**
- * Gemini 2.0 Flash TTS Client for Android.
+ * Gemini 3.8 Flash TTS Client for Android.
  * Communicates with Google's Gemini TTS endpoint using OkHttp,
- * handles Base64 audio decoding, and adds standard 44-byte WAV headers for PCM data.
+ * supports style presets, multi-speaker dialogue, and custom Voice Design IDs.
  */
 class GeminiTtsClient(
     private val apiKey: String,
@@ -31,7 +35,7 @@ class GeminiTtsClient(
 
     companion object {
         const val DEFAULT_MODEL_ID = "gemini-3.8-flash-tts"
-        val APPROVED_VOICES = listOf("Kore", "Puck", "Charon", "Fenrir", "Aoede")
+        val APPROVED_VOICES = VoiceProfile.PREBUILT_VOICES.map { it.id }
         val GEMINI_VOICES = APPROVED_VOICES
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
         private const val TAG = "GeminiTtsClient"
@@ -96,8 +100,9 @@ class GeminiTtsClient(
 
     suspend fun synthesize(
         text: String,
-        voiceName: String = "Kore",
-        style: String = "narrator, natural pacing"
+        voiceName: String = "Charon",
+        stylePreset: VoiceStylePreset = VoiceStylePreset.NATURAL,
+        multiSpeakerConfig: MultiSpeakerConfig? = null
     ): ByteArray = withContext(Dispatchers.IO) {
         val cleanText = text.trim()
         if (cleanText.isEmpty()) {
@@ -110,30 +115,70 @@ class GeminiTtsClient(
 
         val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$apiKey"
 
-        // Structured payload with generationConfig and speechConfig
-        val payload = JSONObject().apply {
-            put("contents", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().apply {
-                            put("text", cleanText)
-                        })
-                    })
-                })
-            })
-            put("generationConfig", JSONObject().apply {
-                put("responseModalities", JSONArray().apply {
-                    put("AUDIO")
-                })
-                put("speechConfig", JSONObject().apply {
-                    put("voiceConfig", JSONObject().apply {
-                        put("prebuiltVoiceConfig", JSONObject().apply {
-                            put("voiceName", voiceName)
-                        })
-                    })
-                })
+        val payload = JSONObject()
+        val generationConfig = JSONObject().apply {
+            put("responseModalities", JSONArray().apply {
+                put("AUDIO")
             })
         }
+
+        if (multiSpeakerConfig != null && multiSpeakerConfig.isEnabled) {
+            val annotator = DialogueTurnAnnotator("Narrator", "Character")
+            val turns = annotator.annotateText(cleanText)
+            val partsArray = JSONArray()
+            for (index in turns.indices) {
+                val turn = turns[index]
+                val turnText = if (index == 0 && stylePreset != VoiceStylePreset.NATURAL) {
+                    "${stylePreset.directorPrompt}\n${turn.text}"
+                } else {
+                    turn.text
+                }
+                partsArray.put(JSONObject().apply {
+                    put("text", turnText)
+                    put("speechMetadata", JSONObject().apply {
+                        put("speaker", turn.speaker)
+                    })
+                })
+            }
+            payload.put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", partsArray)
+                })
+            })
+            generationConfig.put("speechConfig", multiSpeakerConfig.toSpeechConfigJson())
+        } else {
+            val promptText = if (stylePreset != VoiceStylePreset.NATURAL) {
+                "${stylePreset.directorPrompt}\n$cleanText"
+            } else {
+                cleanText
+            }
+            val partsArray = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("text", promptText)
+                })
+            }
+            payload.put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", partsArray)
+                })
+            })
+
+            val isCustomVoice = voiceName.startsWith("voice_") || voiceName.startsWith("voices/")
+            val cleanVoiceId = voiceName.removePrefix("voices/")
+            val voiceConfigObj = JSONObject().apply {
+                if (isCustomVoice) {
+                    put("voice", cleanVoiceId)
+                } else {
+                    put("prebuiltVoiceConfig", JSONObject().apply {
+                        put("voiceName", voiceName)
+                    })
+                }
+            }
+            generationConfig.put("speechConfig", JSONObject().apply {
+                put("voiceConfig", voiceConfigObj)
+            })
+        }
+        payload.put("generationConfig", generationConfig)
 
         val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
         val request = Request.Builder()
@@ -224,6 +269,108 @@ class GeminiTtsClient(
         }
 
         throw IllegalArgumentException("Audio data not found in response JSON.")
+    }
+
+    suspend fun synthesize(
+        text: String,
+        voiceName: String,
+        style: String
+    ): ByteArray = synthesize(text, voiceName, VoiceStylePreset.fromId(style), null)
+
+    suspend fun createCustomVoice(
+        displayName: String,
+        promptDescription: String
+    ): Pair<String, ByteArray?> = withContext(Dispatchers.IO) {
+        if (!hasApiKey()) {
+            throw IllegalArgumentException("API key is not configured.")
+        }
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
+        val payload = JSONObject().apply {
+            put("store", true)
+            put("voice", JSONObject().apply {
+                put("model", modelId)
+                put("type", "prompted")
+                put("display_name", displayName)
+                put("prompted", JSONObject().apply {
+                    put("input", promptDescription)
+                })
+            })
+        }
+        val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .header("User-Agent", "GeminiAudiobookAndroid/1.1.0")
+            .build()
+
+        httpClient.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            if (!response.isSuccessful) {
+                Log.e(TAG, "Voice design failed (${response.code}): $body")
+                throw IllegalStateException("فشل تصميم الصوت (${response.code}): $body")
+            }
+            val json = JSONObject(body)
+            val fullName = json.optString("name", "")
+            val voiceId = fullName.removePrefix("voices/")
+            val sampleB64 = json.optString("sample_audio", "")
+            val sampleBytes = if (sampleB64.isNotEmpty()) {
+                try {
+                    val raw = Base64.decode(sampleB64, Base64.DEFAULT)
+                    if (raw.size >= 4 &&
+                        raw[0] == 'R'.code.toByte() &&
+                        raw[1] == 'I'.code.toByte() &&
+                        raw[2] == 'F'.code.toByte() &&
+                        raw[3] == 'F'.code.toByte()
+                    ) {
+                        raw
+                    } else {
+                        createWavHeader(raw, sampleRate = 24000)
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            } else null
+
+            Pair(voiceId, sampleBytes)
+        }
+    }
+
+    suspend fun listCustomVoices(): List<VoiceProfile> = withContext(Dispatchers.IO) {
+        if (!hasApiKey()) return@withContext emptyList()
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey&type=prompted"
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .header("User-Agent", "GeminiAudiobookAndroid/1.1.0")
+            .build()
+
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: ""
+                val json = JSONObject(body)
+                val voicesArray = json.optJSONArray("voices") ?: return@withContext emptyList()
+                val list = mutableListOf<VoiceProfile>()
+                for (i in 0 until voicesArray.length()) {
+                    val v = voicesArray.getJSONObject(i)
+                    val rawName = v.optString("name", "")
+                    val id = rawName.removePrefix("voices/")
+                    val disp = v.optString("display_name", id)
+                    list.add(
+                        VoiceProfile(
+                            id = id,
+                            displayNameArabic = "$disp (مخصص)",
+                            isCustomVoiceDesign = true,
+                            descriptionArabic = "صوت تم تصميمه بالذكاء الاصطناعي: $disp"
+                        )
+                    )
+                }
+                list
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to list custom voices: ${e.message}")
+            emptyList()
+        }
     }
 
     fun saveAudioAtomically(targetFile: File, audioBytes: ByteArray) {
