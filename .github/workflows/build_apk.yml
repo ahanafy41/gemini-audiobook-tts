@@ -52,11 +52,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.1.0"
-          name: "Gemini Audiobook TTS v1.1.0 (APK)"
+          tag_name: "v1.1.1"
+          name: "Gemini Audiobook TTS v1.1.1 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث الشامل v1.1.0
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.1.1
             
+            - **مزامنة واسترجاع الأصوات المصممة (Custom Voices Cloud Sync)**: استرجاع الأصوات المصممة الخاصة بمفتاح Google AI Studio تلقائياً وبزر مزامنة فوري.
+            - **إدخال معرف الصوت يدوياً (Manual Voice ID)**: إمكانية إدخال أي معرف صوت مخصص (`voice_xxxx`) مباشرة واعتماده فوراً.
             - **واجهة عصرية بتصميم Material Design**: تبويبات سفلية متوافقة بالكامل مع قارئات الشاشة (TalkBack وقارئ الشاشة الصيني Jieshuo / CSR).
             - **استوديو الأصوات المتقدم (Gemini 3.8 Flash TTS)**:
               - دعم كامل لقائمة الـ 30 صوتاً رسمياً مع التوصيف الصوتي والنبرات.

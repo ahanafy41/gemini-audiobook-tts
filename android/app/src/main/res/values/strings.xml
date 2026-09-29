@@ -55,4 +55,8 @@
     <string name="label_model_selection">نموذج الذكاء الاصطناعي</string>
     <string name="label_accessibility_notes">إمكانية الوصول وقارئات الشاشة (TalkBack و Jieshuo)</string>
     <string name="desc_accessibility_notes">تم تصميم هذا التطبيق بالكامل وفق أعلى معايير إمكانية الوصول للمكفوفين: شاشات ميسرة، أبعاد لمس قياسية 48dp+، أزرار واضحة التسمية، وتوافق تام مع TalkBack وقارئ الشاشة الصيني Jieshuo / CSR.</string>
+    <string name="btn_sync_custom_voices">مزامنة الأصوات المصممة الخاصة بمفتاحك</string>
+    <string name="label_enter_custom_voice_id">+ إدخال معرف صوت مخصص يدوياً (Voice ID)</string>
+    <string name="dialog_enter_voice_id_title">أدخل معرف الصوت المخصص</string>
+    <string name="dialog_enter_voice_id_hint">مثال: voice_42n103zlznqt</string>
 </resources>

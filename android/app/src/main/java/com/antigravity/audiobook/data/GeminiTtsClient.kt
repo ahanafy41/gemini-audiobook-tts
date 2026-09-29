@@ -353,15 +353,20 @@ class GeminiTtsClient(
                 val list = mutableListOf<VoiceProfile>()
                 for (i in 0 until voicesArray.length()) {
                     val v = voicesArray.getJSONObject(i)
-                    val rawName = v.optString("name", "")
-                    val id = rawName.removePrefix("voices/")
-                    val disp = v.optString("display_name", id)
+                    val id = when {
+                        v.has("id") -> v.getString("id")
+                        v.has("name") -> v.getString("name").removePrefix("voices/")
+                        else -> ""
+                    }
+                    if (id.isBlank()) continue
+                    val disp = v.optString("display_name", id).ifBlank { id }
+                    val prompt = v.optJSONObject("prompted")?.optString("input", "") ?: ""
                     list.add(
                         VoiceProfile(
                             id = id,
-                            displayNameArabic = "$disp (مخصص)",
+                            displayNameArabic = "$disp ($id)",
                             isCustomVoiceDesign = true,
-                            descriptionArabic = "صوت تم تصميمه بالذكاء الاصطناعي: $disp"
+                            descriptionArabic = prompt.ifBlank { "معرف: $id" }
                         )
                     )
                 }

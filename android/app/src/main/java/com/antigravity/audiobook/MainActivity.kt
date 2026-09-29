@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         private const val KEY_MULTI_SPEAKER = "gemini_multi_speaker"
         private const val KEY_CHARACTER_VOICE = "gemini_character_voice"
         private const val KEY_MODEL_ID = "gemini_model_id"
+        private const val KEY_CUSTOM_VOICES_JSON = "custom_voices_json"
 
         private const val DEFAULT_NARRATOR_VOICE = "Charon"
         private const val DEFAULT_CHARACTER_VOICE = "Kore"
@@ -102,6 +103,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnSelectCharacterVoice: Button
     private lateinit var btnTestVoiceAudition: Button
     private lateinit var btnCreateCustomVoice: Button
+    private lateinit var btnSyncCustomVoices: Button
 
     // Tab 4: Settings Views
     private lateinit var textApiKeyStatus: TextView
@@ -111,6 +113,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     // State & Controllers
     private lateinit var settingsPrefs: SharedPreferences
+    private val customVoices = mutableListOf<VoiceProfile>()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
 
@@ -135,6 +138,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         settingsPrefs = getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
+        loadCachedCustomVoices()
         initViews()
         setupBottomNavigation()
         setupListeners()
@@ -142,6 +146,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         refreshBooksList()
         updateStudioUI()
         updateSettingsUI()
+        fetchAndLoadCustomVoices(userTriggered = false)
     }
 
     private fun initViews() {
@@ -179,6 +184,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectCharacterVoice = findViewById(R.id.btnSelectCharacterVoice)
         btnTestVoiceAudition = findViewById(R.id.btnTestVoiceAudition)
         btnCreateCustomVoice = findViewById(R.id.btnCreateCustomVoice)
+        btnSyncCustomVoices = findViewById(R.id.btnSyncCustomVoices)
 
         // Settings Views
         textApiKeyStatus = findViewById(R.id.textApiKeyStatus)
@@ -206,6 +212,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 R.id.tab_studio -> {
                     switchTab(layoutTabStudio)
                     announceStatus("تبويب استوديو الأصوات وأنماط الإلقاء")
+                    if (customVoices.isEmpty()) {
+                        fetchAndLoadCustomVoices(userTriggered = false)
+                    }
                     true
                 }
                 R.id.tab_settings -> {
@@ -317,6 +326,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             showVoiceDesignDialog()
         }
 
+        btnSyncCustomVoices.setOnClickListener {
+            fetchAndLoadCustomVoices(userTriggered = true)
+        }
+
         // Settings Actions
         btnEditApiKey.setOnClickListener {
             showApiKeyEditDialog()
@@ -354,12 +367,92 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     }
 
     // -------------------------------------------------------------------------
-    // Voice Studio Management
+    // Voice Studio Management & Custom Voice Cloud Sync
     // -------------------------------------------------------------------------
+
+    private fun loadCachedCustomVoices() {
+        customVoices.clear()
+        val rawJson = settingsPrefs.getString(KEY_CUSTOM_VOICES_JSON, null) ?: return
+        try {
+            val array = org.json.JSONArray(rawJson)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val id = obj.optString("id")
+                val disp = obj.optString("displayNameArabic", id)
+                val desc = obj.optString("descriptionArabic", "")
+                if (id.isNotBlank()) {
+                    customVoices.add(VoiceProfile(id, disp, isCustomVoiceDesign = true, descriptionArabic = desc))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error parsing cached custom voices: ${e.message}")
+        }
+    }
+
+    private fun saveCustomVoicesToPrefs(list: List<VoiceProfile>) {
+        val array = org.json.JSONArray()
+        for (v in list) {
+            val obj = org.json.JSONObject().apply {
+                put("id", v.id)
+                put("displayNameArabic", v.displayNameArabic)
+                put("descriptionArabic", v.descriptionArabic)
+            }
+            array.put(obj)
+        }
+        settingsPrefs.edit().putString(KEY_CUSTOM_VOICES_JSON, array.toString()).apply()
+    }
+
+    private fun fetchAndLoadCustomVoices(userTriggered: Boolean = false) {
+        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        if (apiKey.isBlank() || apiKey.length < 15) {
+            if (userTriggered) {
+                announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لمزامنة الأصوات")
+                Toast.makeText(this, "يرجى تسجيل المفتاح في الإعدادات أولاً", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        if (userTriggered) {
+            announceStatus("جارِ مزامنة واسترجاع الأصوات المصممة من حسابك على Google...")
+        }
+
+        lifecycleScope.launch {
+            try {
+                val client = GeminiTtsClient(apiKey = apiKey)
+                val fetched = client.listCustomVoices()
+                if (fetched.isNotEmpty()) {
+                    customVoices.clear()
+                    customVoices.addAll(fetched)
+                    saveCustomVoicesToPrefs(fetched)
+                    updateStudioUI()
+                    val msg = "تم العثور على ${fetched.size} أصوات مصممة خاصة بمفتاحك ومزامنتها بنجاح!"
+                    announceStatus(msg)
+                    if (userTriggered) {
+                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    }
+                } else if (userTriggered) {
+                    announceStatus("لم يتم العثور على أصوات مصممة محفوظة على هذا المفتاح حتى الآن")
+                    Toast.makeText(this@MainActivity, "لم يتم العثور على أصوات مصممة محفوظة", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch custom voices: ${e.message}")
+                if (userTriggered) {
+                    announceStatus("تعذر مزامنة الأصوات: ${e.localizedMessage ?: e.message}")
+                    Toast.makeText(this@MainActivity, "خطأ في المزامنة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun getVoiceProfile(id: String): VoiceProfile {
+        val custom = customVoices.firstOrNull { it.id.equals(id, ignoreCase = true) }
+        if (custom != null) return custom
+        return VoiceProfile.fromStoredString(id)
+    }
 
     private fun updateStudioUI() {
         val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
-        val narratorProfile = VoiceProfile.fromStoredString(narratorId)
+        val narratorProfile = getVoiceProfile(narratorId)
         btnSelectNarratorVoice.text = "صوت الراوي: ${narratorProfile.displayNameArabic}"
         btnSelectNarratorVoice.contentDescription = "زر اختيار صوت الراوي الأساسي، المختار حالياً هو ${narratorProfile.displayNameArabic}"
 
@@ -374,46 +467,131 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectCharacterVoice.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
 
         val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
-        val characterProfile = VoiceProfile.fromStoredString(characterId)
+        val characterProfile = getVoiceProfile(characterId)
         btnSelectCharacterVoice.text = "صوت الشخصيات: ${characterProfile.displayNameArabic}"
         btnSelectCharacterVoice.contentDescription = "زر اختيار صوت الشخصيات والحوار، المختار حالياً هو ${characterProfile.displayNameArabic}"
     }
 
     private fun showNarratorVoicePicker() {
-        val voices = VoiceProfile.PREBUILT_VOICES
-        val displayItems = voices.map { "${it.displayNameArabic} (${it.descriptionArabic})" }.toTypedArray()
+        val combinedVoices = mutableListOf<VoiceProfile>()
+        combinedVoices.addAll(customVoices)
+        combinedVoices.addAll(VoiceProfile.PREBUILT_VOICES)
+
+        val displayItems = mutableListOf<String>()
+        for (v in customVoices) {
+            displayItems.add("⭐ [صوت مصمم] ${v.displayNameArabic}")
+        }
+        for (v in VoiceProfile.PREBUILT_VOICES) {
+            displayItems.add("${v.displayNameArabic} (${v.descriptionArabic})")
+        }
+        displayItems.add("+ إدخال معرف صوت مخصص يدوياً (Voice ID)")
+        displayItems.add("🔄 مزامنة واسترجاع الأصوات من السحابة")
+
         val currentVoiceId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
-        var selectedIdx = voices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
-        if (selectedIdx < 0) selectedIdx = 0
+        var selectedIdx = combinedVoices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
+        if (selectedIdx < 0) selectedIdx = customVoices.size
 
         AlertDialog.Builder(this)
             .setTitle("اختر صوت الراوي الأساسي")
-            .setSingleChoiceItems(displayItems, selectedIdx) { dialog, which ->
-                val chosen = voices[which]
-                settingsPrefs.edit().putString(KEY_GEMINI_VOICE, chosen.id).apply()
-                updateStudioUI()
-                announceStatus("تم اختيار صوت الراوي: ${chosen.displayNameArabic}")
-                dialog.dismiss()
+            .setSingleChoiceItems(displayItems.toTypedArray(), selectedIdx) { dialog, which ->
+                when {
+                    which < combinedVoices.size -> {
+                        val chosen = combinedVoices[which]
+                        settingsPrefs.edit().putString(KEY_GEMINI_VOICE, chosen.id).apply()
+                        updateStudioUI()
+                        announceStatus("تم اختيار صوت الراوي: ${chosen.displayNameArabic}")
+                        dialog.dismiss()
+                    }
+                    which == combinedVoices.size -> {
+                        dialog.dismiss()
+                        showManualVoiceIdDialog(isCharacter = false)
+                    }
+                    else -> {
+                        dialog.dismiss()
+                        fetchAndLoadCustomVoices(userTriggered = true)
+                    }
+                }
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     private fun showCharacterVoicePicker() {
-        val voices = VoiceProfile.PREBUILT_VOICES
-        val displayItems = voices.map { "${it.displayNameArabic} (${it.descriptionArabic})" }.toTypedArray()
+        val combinedVoices = mutableListOf<VoiceProfile>()
+        combinedVoices.addAll(customVoices)
+        combinedVoices.addAll(VoiceProfile.PREBUILT_VOICES)
+
+        val displayItems = mutableListOf<String>()
+        for (v in customVoices) {
+            displayItems.add("⭐ [صوت مصمم] ${v.displayNameArabic}")
+        }
+        for (v in VoiceProfile.PREBUILT_VOICES) {
+            displayItems.add("${v.displayNameArabic} (${v.descriptionArabic})")
+        }
+        displayItems.add("+ إدخال معرف صوت مخصص يدوياً (Voice ID)")
+        displayItems.add("🔄 مزامنة واسترجاع الأصوات من السحابة")
+
         val currentVoiceId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
-        var selectedIdx = voices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
-        if (selectedIdx < 0) selectedIdx = 1
+        var selectedIdx = combinedVoices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
+        if (selectedIdx < 0) selectedIdx = if (customVoices.isNotEmpty()) customVoices.size + 1 else 1
 
         AlertDialog.Builder(this)
             .setTitle("اختر صوت شخصيات الحوار")
-            .setSingleChoiceItems(displayItems, selectedIdx) { dialog, which ->
-                val chosen = voices[which]
-                settingsPrefs.edit().putString(KEY_CHARACTER_VOICE, chosen.id).apply()
+            .setSingleChoiceItems(displayItems.toTypedArray(), selectedIdx) { dialog, which ->
+                when {
+                    which < combinedVoices.size -> {
+                        val chosen = combinedVoices[which]
+                        settingsPrefs.edit().putString(KEY_CHARACTER_VOICE, chosen.id).apply()
+                        updateStudioUI()
+                        announceStatus("تم اختيار صوت الشخصيات: ${chosen.displayNameArabic}")
+                        dialog.dismiss()
+                    }
+                    which == combinedVoices.size -> {
+                        dialog.dismiss()
+                        showManualVoiceIdDialog(isCharacter = true)
+                    }
+                    else -> {
+                        dialog.dismiss()
+                        fetchAndLoadCustomVoices(userTriggered = true)
+                    }
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun showManualVoiceIdDialog(isCharacter: Boolean) {
+        val input = EditText(this).apply {
+            hint = "أدخل معرف الصوت (مثال: voice_42n103zlznqt)"
+            contentDescription = "حقل إدخال معرف الصوت المخصص"
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("إدخال معرف صوت مخصص (Voice ID)")
+            .setView(input)
+            .setPositiveButton("اعتماد الصوت") { _, _ ->
+                val enteredId = input.text.toString().trim()
+                if (enteredId.isBlank()) {
+                    Toast.makeText(this, "يرجى إدخال معرف الصوت", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                val newProfile = VoiceProfile(
+                    id = enteredId,
+                    displayNameArabic = "صوت مخصص ($enteredId)",
+                    isCustomVoiceDesign = true,
+                    descriptionArabic = "معرف مخصص مدخل يدوياً"
+                )
+                if (customVoices.none { it.id.equals(enteredId, ignoreCase = true) }) {
+                    customVoices.add(0, newProfile)
+                    saveCustomVoicesToPrefs(customVoices)
+                }
+                val prefKey = if (isCharacter) KEY_CHARACTER_VOICE else KEY_GEMINI_VOICE
+                settingsPrefs.edit().putString(prefKey, enteredId).apply()
                 updateStudioUI()
-                announceStatus("تم اختيار صوت الشخصيات: ${chosen.displayNameArabic}")
-                dialog.dismiss()
+                announceStatus("تم تفعيل الصوت المخصص: $enteredId")
+                Toast.makeText(this, "تم تفعيل الصوت المخصص بنجاح", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -549,6 +727,16 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     try {
                         val client = GeminiTtsClient(apiKey = apiKey)
                         val (voiceId, sampleBytes) = client.createCustomVoice(name, prompt)
+                        val newProfile = VoiceProfile(
+                            id = voiceId,
+                            displayNameArabic = "$name ($voiceId)",
+                            isCustomVoiceDesign = true,
+                            descriptionArabic = prompt
+                        )
+                        if (customVoices.none { it.id.equals(voiceId, ignoreCase = true) }) {
+                            customVoices.add(0, newProfile)
+                            saveCustomVoicesToPrefs(customVoices)
+                        }
                         settingsPrefs.edit().putString(KEY_GEMINI_VOICE, voiceId).apply()
                         updateStudioUI()
                         announceStatus("تم إنشاء الصوت بنجاح بمعرف: $voiceId")
@@ -608,6 +796,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 updateSettingsUI()
                 announceStatus("تم حفظ مفتاح Gemini API بنجاح")
                 Toast.makeText(this, "تم حفظ المفتاح", Toast.LENGTH_SHORT).show()
+                fetchAndLoadCustomVoices(userTriggered = false)
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -804,8 +993,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 val multiConfig = if (isMultiSpeaker) {
                     MultiSpeakerConfig(
                         isEnabled = true,
-                        narratorVoice = VoiceProfile.fromStoredString(narratorVoice),
-                        characterVoice = VoiceProfile.fromStoredString(characterVoice)
+                        narratorVoice = getVoiceProfile(narratorVoice),
+                        characterVoice = getVoiceProfile(characterVoice)
                     )
                 } else null
 
