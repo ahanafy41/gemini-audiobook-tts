@@ -121,16 +121,23 @@ class GeminiTtsClient:
         """
         Constructs the structured JSON request payload for gemini-3.8-flash-tts.
         """
+        is_custom_voice = voice_name.startswith("voice_") or voice_name.startswith("voices/")
+        clean_voice_id = voice_name.replace("voices/", "")
+        if is_custom_voice:
+            voice_config = {"voice": clean_voice_id}
+        else:
+            voice_config = {
+                "prebuilt_voice_config": {
+                    "voice_name": voice_name
+                }
+            }
+
         return {
             "model": self.model_id,
             "input": text,
             "generation_config": {
                 "speech_config": {
-                    "voice_config": {
-                        "prebuilt_voice_config": {
-                            "voice_name": voice_name
-                        }
-                    }
+                    "voice_config": voice_config
                 }
             },
             "speech_metadata": {

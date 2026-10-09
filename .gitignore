@@ -20,3 +20,11 @@ raw_chunks/
 .backups/
 debug_manifest.json
 *.wav
+
+# Internal Planning & Development Specs (Private to developer)
+project_spec.json
+tasks.md
+references_manifest.json
+.env
+.env.*
+

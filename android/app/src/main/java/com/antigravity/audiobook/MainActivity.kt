@@ -7,8 +7,10 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -23,6 +25,9 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -111,6 +116,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnEditApiKey: Button
     private lateinit var btnTestApiKey: Button
     private lateinit var btnSelectModel: Button
+    private lateinit var textAppVersion: TextView
+    private lateinit var btnCheckAppUpdate: Button
 
     // State & Controllers
     private lateinit var settingsPrefs: SharedPreferences
@@ -148,6 +155,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         updateStudioUI()
         updateSettingsUI()
         fetchAndLoadCustomVoices(userTriggered = false)
+        checkForAppUpdates(userTriggered = false)
     }
 
     private fun initViews() {
@@ -192,6 +200,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnEditApiKey = findViewById(R.id.btnEditApiKey)
         btnTestApiKey = findViewById(R.id.btnTestApiKey)
         btnSelectModel = findViewById(R.id.btnSelectModel)
+        textAppVersion = findViewById(R.id.textAppVersion)
+        btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
 
         booksAdapter = BooksAdapter(this, booksList)
         listViewBooks.adapter = booksAdapter
@@ -342,6 +352,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         btnSelectModel.setOnClickListener {
             showModelSelectionDialog()
+        }
+
+        btnCheckAppUpdate.setOnClickListener {
+            checkForAppUpdates(userTriggered = true)
         }
     }
 
@@ -723,25 +737,29 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     return@setPositiveButton
                 }
 
-                announceStatus("جارِ تصميم الصوت الجديد بالذكاء الاصطناعي...")
+                announceStatus("جارِ تصميم الصوت الجديد بالذكاء الاصطناعي... يرجى الانتظار")
+                Toast.makeText(context, "جارِ تصميم الصوت وتوليد العينة... يرجى الانتظار", Toast.LENGTH_SHORT).show()
+                val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
                 lifecycleScope.launch {
                     try {
-                        val client = GeminiTtsClient(apiKey = apiKey)
+                        val client = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
                         val (voiceId, sampleBytes) = client.createCustomVoice(name, prompt)
+                        if (voiceId.isBlank()) {
+                            throw IllegalStateException("لم يُرجع الخادم معرف الصوت (Voice ID).")
+                        }
                         val newProfile = VoiceProfile(
                             id = voiceId,
                             displayNameArabic = "$name ($voiceId)",
                             isCustomVoiceDesign = true,
                             descriptionArabic = prompt
                         )
-                        if (customVoices.none { it.id.equals(voiceId, ignoreCase = true) }) {
-                            customVoices.add(0, newProfile)
-                            saveCustomVoicesToPrefs(customVoices)
-                        }
+                        customVoices.removeAll { it.id.equals(voiceId, ignoreCase = true) }
+                        customVoices.add(0, newProfile)
+                        saveCustomVoicesToPrefs(customVoices)
                         settingsPrefs.edit().putString(KEY_GEMINI_VOICE, voiceId).apply()
                         updateStudioUI()
-                        announceStatus("تم إنشاء الصوت بنجاح بمعرف: $voiceId")
-                        Toast.makeText(context, "تم حفظ وتفعيل الصوت المخصص!", Toast.LENGTH_SHORT).show()
+                        announceStatus("تم إنشاء الصوت بنجاح وحفظه وتفعيله بمعرف: $voiceId")
+                        Toast.makeText(context, "تم حفظ وتفعيل الصوت المخصص في القائمة!", Toast.LENGTH_SHORT).show()
 
                         sampleBytes?.let { bytes ->
                             val sampleFile = File(cacheDir, "sample_designed_$voiceId.wav")
@@ -776,6 +794,13 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
         btnSelectModel.text = "النموذج المعتمد: $modelId"
+
+        val currentVer = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.5"
+        } catch (e: Exception) {
+            "1.1.5"
+        }
+        textAppVersion.text = "الإصدار الحالي: $currentVer (موقع بالمفتاح الدائم)"
     }
 
     private fun showApiKeyEditDialog() {
@@ -1235,6 +1260,178 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     override fun onDestroy() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
         super.onDestroy()
+    }
+
+    // -------------------------------------------------------------------------
+    // In-App Updates & Package Installation Management
+    // -------------------------------------------------------------------------
+
+    private fun checkForAppUpdates(userTriggered: Boolean) {
+        if (userTriggered) {
+            announceStatus("جارِ فحص التحديثات من الخادم...")
+            Toast.makeText(this, "جارِ فحص وجود تحديثات...", Toast.LENGTH_SHORT).show()
+        }
+
+        lifecycleScope.launch {
+            try {
+                val currentVersionName = try {
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.5"
+                } catch (e: Exception) {
+                    "1.1.5"
+                }
+
+                val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {
+                    val url = "https://api.github.com/repos/ahanafy41/gemini_audiobook_tts/releases/latest"
+                    val client = OkHttpClient.Builder().build()
+                    val request = Request.Builder()
+                        .url(url)
+                        .header("User-Agent", "GeminiAudiobookApp/$currentVersionName")
+                        .header("Accept", "application/vnd.github.v3+json")
+                        .build()
+
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            throw IllegalStateException("استجابة الخادم (${response.code})")
+                        }
+                        val body = response.body?.string() ?: ""
+                        val json = JSONObject(body)
+                        val tagName = json.optString("tag_name", "").removePrefix("v")
+                        val bodyText = json.optString("body", "تحديث جديد يتضمن تحسينات للأداء وإصلاحات.")
+                        val assets = json.optJSONArray("assets")
+                        var apkUrl = ""
+                        if (assets != null) {
+                            for (i in 0 until assets.length()) {
+                                val asset = assets.getJSONObject(i)
+                                val name = asset.optString("name", "")
+                                if (name.endsWith(".apk", ignoreCase = true)) {
+                                    apkUrl = asset.optString("browser_download_url", "")
+                                    break
+                                }
+                            }
+                        }
+                        Triple(tagName, bodyText, apkUrl)
+                    }
+                }
+
+                val hasNewVersion = isVersionNewer(latestTag, currentVersionName)
+                if (hasNewVersion && apkDownloadUrl.isNotBlank()) {
+                    announceStatus("يتوفر تحديث جديد: الإصدار $latestTag")
+                    showUpdateAvailableDialog(latestTag, changelog, apkDownloadUrl)
+                } else {
+                    if (userTriggered) {
+                        announceStatus("أنت تستخدم أحدث إصدار متوفر بالفعل ($currentVersionName)")
+                        Toast.makeText(this@MainActivity, "التطبيق محدث لأحدث إصدار ($currentVersionName)", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Update check failed: ${e.message}")
+                if (userTriggered) {
+                    announceStatus("تعذر التحقق من التحديثات: ${e.localizedMessage ?: e.message}")
+                    Toast.makeText(this@MainActivity, "خطأ في فحص التحديثات: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun isVersionNewer(remote: String, local: String): Boolean {
+        if (remote.isBlank() || local.isBlank()) return false
+        val rParts = remote.split(".").mapNotNull { it.toIntOrNull() }
+        val lParts = local.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLen = maxOf(rParts.size, lParts.size)
+        for (i in 0 until maxLen) {
+            val r = rParts.getOrElse(i) { 0 }
+            val l = lParts.getOrElse(i) { 0 }
+            if (r > l) return true
+            if (r < l) return false
+        }
+        return false
+    }
+
+    private fun showUpdateAvailableDialog(version: String, notes: String, downloadUrl: String) {
+        AlertDialog.Builder(this)
+            .setTitle("تحديث جديد متاح: v$version")
+            .setMessage("$notes\n\nهل ترغب في تحميل وتثبيت التحديث الآن؟")
+            .setPositiveButton("تحميل وتثبيت التحديث") { _, _ ->
+                downloadAndInstallUpdate(downloadUrl, version)
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun downloadAndInstallUpdate(downloadUrl: String, version: String) {
+        announceStatus("جارِ تحميل التحديث v$version... يرجى الانتظار")
+        Toast.makeText(this, "جارِ تحميل ملف التحديث في الخلفية...", Toast.LENGTH_SHORT).show()
+
+        lifecycleScope.launch {
+            try {
+                val apkFile = File(cacheDir, "GeminiAudiobook_update.apk")
+                withContext(Dispatchers.IO) {
+                    val client = OkHttpClient.Builder().build()
+                    val req = Request.Builder()
+                        .url(downloadUrl)
+                        .header("User-Agent", "GeminiAudiobookUpdater")
+                        .build()
+
+                    client.newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) throw IllegalStateException("فشل التحميل (${resp.code})")
+                        val body = resp.body ?: throw IllegalStateException("ملف التحديث فارغ")
+                        val tempFile = File(cacheDir, "GeminiAudiobook_update.tmp")
+                        body.byteStream().use { input ->
+                            FileOutputStream(tempFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        if (apkFile.exists()) apkFile.delete()
+                        tempFile.renameTo(apkFile)
+                    }
+                }
+
+                announceStatus("اكتمل تحميل التحديث. جارِ فتح شاشة التثبيت...")
+                installApkFile(apkFile)
+            } catch (e: Exception) {
+                Log.e(TAG, "Download update failed: ${e.message}")
+                announceStatus("فشل تحميل التحديث: ${e.localizedMessage ?: e.message}")
+                Toast.makeText(this@MainActivity, "خطأ في التحميل: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun installApkFile(apkFile: File) {
+        if (!apkFile.exists() || apkFile.length() < 1000) {
+            Toast.makeText(this, "ملف التحديث غير صالح", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!packageManager.canRequestPackageInstalls()) {
+                announceStatus("يرجى تفعيل خيار السماح بتثبيت التطبيقات من هذا المصدر لمتابعة التحديث")
+                Toast.makeText(this, "يرجى منح إذن تثبيت التطبيقات من خارج المتجر", Toast.LENGTH_LONG).show()
+                val permissionIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+                startActivity(permissionIntent)
+                return
+            }
+        }
+
+        try {
+            val apkUri = FileProvider.getUriForFile(
+                this,
+                "com.antigravity.audiobook.fileprovider",
+                apkFile
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch package installer: ${e.message}")
+            announceStatus("تعذر فتح مثبت الحزم: ${e.localizedMessage ?: e.message}")
+            Toast.makeText(this, "خطأ أثناء التثبيت: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private inner class BooksAdapter(

@@ -11,8 +11,8 @@ android {
         applicationId = "com.antigravity.audiobook"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.1.4"
+        versionCode = 12
+        versionName = "1.1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,6 +52,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "**/*.md"
+            excludes += "**/project_spec.json"
+            excludes += "**/tasks.md"
+            excludes += "**/debug_manifest.json"
+            excludes += "**/references_manifest.json"
         }
     }
     compileOptions {

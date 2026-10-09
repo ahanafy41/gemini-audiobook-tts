@@ -332,11 +332,12 @@ class GeminiTtsClient(
         if (!hasApiKey()) {
             throw IllegalArgumentException("API key is not configured.")
         }
+        val cleanModel = modelId.removePrefix("models/")
         val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
         val payload = JSONObject().apply {
             put("store", true)
             put("voice", JSONObject().apply {
-                put("model", modelId)
+                put("model", cleanModel)
                 put("type", "prompted")
                 put("display_name", displayName)
                 put("prompted", JSONObject().apply {
@@ -348,7 +349,8 @@ class GeminiTtsClient(
         val request = Request.Builder()
             .url(url)
             .post(requestBody)
-            .header("User-Agent", "GeminiAudiobookAndroid/1.1.0")
+            .header("x-goog-api-key", apiKey)
+            .header("User-Agent", "GeminiAudiobookAndroid/1.1.5")
             .build()
 
         try {
@@ -359,9 +361,41 @@ class GeminiTtsClient(
                     throw IllegalStateException("فشل تصميم الصوت (${response.code}): $body")
                 }
                 val json = JSONObject(body)
-                val fullName = json.optString("name", "")
-                val voiceId = fullName.removePrefix("voices/")
-                val sampleB64 = json.optString("sample_audio", "")
+                val voiceId = when {
+                    json.has("id") && json.optString("id").isNotBlank() -> json.optString("id")
+                    json.has("name") && json.optString("name").isNotBlank() -> json.optString("name").removePrefix("voices/")
+                    json.has("voice") -> {
+                        val vObj = json.optJSONObject("voice")
+                        vObj?.optString("id")?.ifBlank { vObj.optString("name").removePrefix("voices/") } ?: ""
+                    }
+                    else -> ""
+                }
+
+                if (voiceId.isBlank()) {
+                    Log.e(TAG, "Missing voice ID in response: $body")
+                    throw IllegalStateException("لم يُرجع الخادم معرف الصوت (Voice ID). استجابة الخادم: $body")
+                }
+
+                val sampleB64 = when {
+                    json.has("sample_audio") -> {
+                        val sampleObj = json.optJSONObject("sample_audio")
+                        if (sampleObj != null) {
+                            sampleObj.optString("data", "")
+                        } else {
+                            json.optString("sample_audio", "")
+                        }
+                    }
+                    json.has("sampleAudio") -> {
+                        val sampleObj = json.optJSONObject("sampleAudio")
+                        if (sampleObj != null) {
+                            sampleObj.optString("data", "")
+                        } else {
+                            json.optString("sampleAudio", "")
+                        }
+                    }
+                    else -> ""
+                }
+
                 val sampleBytes = if (sampleB64.isNotEmpty()) {
                     try {
                         val raw = Base64.decode(sampleB64, Base64.DEFAULT)
@@ -394,13 +428,17 @@ class GeminiTtsClient(
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("User-Agent", "GeminiAudiobookAndroid/1.1.0")
+            .header("x-goog-api-key", apiKey)
+            .header("User-Agent", "GeminiAudiobookAndroid/1.1.5")
             .build()
 
         try {
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
                 val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Failed to list custom voices (${response.code}): $body")
+                    return@withContext emptyList()
+                }
                 val json = JSONObject(body)
                 val voicesArray = json.optJSONArray("voices") ?: return@withContext emptyList()
                 val list = mutableListOf<VoiceProfile>()
