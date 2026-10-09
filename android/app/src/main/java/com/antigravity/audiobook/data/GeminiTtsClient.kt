@@ -422,14 +422,120 @@ class GeminiTtsClient(
         }
     }
 
+    suspend fun replicateCustomVoice(
+        displayName: String,
+        referenceAudioBytes: ByteArray,
+        consentAudioBytes: ByteArray
+    ): Pair<String, ByteArray?> = withContext(Dispatchers.IO) {
+        if (!hasApiKey()) {
+            throw IllegalArgumentException("API key is not configured.")
+        }
+        val cleanModel = modelId.removePrefix("models/")
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
+
+        val refB64 = Base64.encodeToString(referenceAudioBytes, Base64.NO_WRAP)
+        val consentB64 = Base64.encodeToString(consentAudioBytes, Base64.NO_WRAP)
+
+        val payload = JSONObject().apply {
+            put("store", true)
+            put("voice", JSONObject().apply {
+                put("model", cleanModel)
+                put("type", "replicated")
+                put("display_name", displayName)
+                put("replicated", JSONObject().apply {
+                    put("reference_audio", JSONObject().apply {
+                        put("data", refB64)
+                    })
+                    put("consent_audio", JSONObject().apply {
+                        put("data", consentB64)
+                    })
+                })
+            })
+        }
+        val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .header("x-goog-api-key", apiKey)
+            .header("User-Agent", "GeminiAudiobookAndroid/1.1.9")
+            .build()
+
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Voice replication failed (${response.code}): $body")
+                    val msg = when {
+                        body.contains("consent", ignoreCase = true) || body.contains("match", ignoreCase = true) ->
+                            "فشل التحقق من الموافقة: يرجى التأكد من أن تسجيل الموافقة لنفس المتحدث وقراءة العبارة بدقة."
+                        body.contains("duration", ignoreCase = true) || body.contains("short", ignoreCase = true) ->
+                            "عينة الصوت قصيرة جداً، يرجى تسجيل عينة لا تقل عن 10 ثوانٍ."
+                        else -> "فشل استنساخ الصوت (${response.code}): $body"
+                    }
+                    throw IllegalStateException(msg)
+                }
+                val json = JSONObject(body)
+                val voiceId = when {
+                    json.has("id") && json.optString("id").isNotBlank() -> json.optString("id")
+                    json.has("name") && json.optString("name").isNotBlank() -> json.optString("name").removePrefix("voices/")
+                    json.has("voice") -> {
+                        val vObj = json.optJSONObject("voice")
+                        vObj?.optString("id")?.ifBlank { vObj.optString("name").removePrefix("voices/") } ?: ""
+                    }
+                    else -> ""
+                }
+
+                if (voiceId.isBlank()) {
+                    Log.e(TAG, "Missing voice ID in replication response: $body")
+                    throw IllegalStateException("لم يُرجع الخادم معرف الصوت (Voice ID). استجابة الخادم: $body")
+                }
+
+                val sampleB64 = when {
+                    json.has("sample_audio") -> {
+                        val sampleObj = json.optJSONObject("sample_audio")
+                        sampleObj?.optString("data", "") ?: json.optString("sample_audio", "")
+                    }
+                    json.has("sampleAudio") -> {
+                        val sampleObj = json.optJSONObject("sampleAudio")
+                        sampleObj?.optString("data", "") ?: json.optString("sampleAudio", "")
+                    }
+                    else -> ""
+                }
+
+                val sampleBytes = if (sampleB64.isNotEmpty()) {
+                    try {
+                        val raw = Base64.decode(sampleB64, Base64.DEFAULT)
+                        if (raw.size >= 4 &&
+                            raw[0] == 'R'.code.toByte() &&
+                            raw[1] == 'I'.code.toByte() &&
+                            raw[2] == 'F'.code.toByte() &&
+                            raw[3] == 'F'.code.toByte()
+                        ) {
+                            raw
+                        } else {
+                            createWavHeader(raw, sampleRate = 24000)
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
+
+                Pair(voiceId, sampleBytes)
+            }
+        } catch (ioe: IOException) {
+            Log.e(TAG, "Network or DNS error in replicateCustomVoice: ${ioe.message}")
+            throw IOException("تعذر الاتصال بالخادم لاستنساخ الصوت بسبب مشكلة في الشبكة: ${ioe.localizedMessage ?: ioe.message}")
+        }
+    }
+
     suspend fun listCustomVoices(): List<VoiceProfile> = withContext(Dispatchers.IO) {
         if (!hasApiKey()) return@withContext emptyList()
-        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey&type=prompted"
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
         val request = Request.Builder()
             .url(url)
             .get()
             .header("x-goog-api-key", apiKey)
-            .header("User-Agent", "GeminiAudiobookAndroid/1.1.5")
+            .header("User-Agent", "GeminiAudiobookAndroid/1.1.9")
             .build()
 
         try {
@@ -452,12 +558,14 @@ class GeminiTtsClient(
                     if (id.isBlank()) continue
                     val disp = v.optString("display_name", id).ifBlank { id }
                     val prompt = v.optJSONObject("prompted")?.optString("input", "") ?: ""
+                    val isReplicated = v.optString("type") == "replicated" || v.has("replicated")
+                    val desc = if (isReplicated) "صوت مستنسخ بالذكاء الاصطناعي (Replicated Voice)" else prompt.ifBlank { "معرف: $id" }
                     list.add(
                         VoiceProfile(
                             id = id,
                             displayNameArabic = "$disp ($id)",
                             isCustomVoiceDesign = true,
-                            descriptionArabic = prompt.ifBlank { "معرف: $id" }
+                            descriptionArabic = desc
                         )
                     )
                 }

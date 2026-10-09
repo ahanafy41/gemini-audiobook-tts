@@ -37,6 +37,7 @@
     <string name="label_multi_speaker">الحوار المتعدد</string>
     <string name="label_character_voice">صوت الشخصيات</string>
     <string name="btn_create_custom_voice">تصميم صوت جديد</string>
+    <string name="btn_replicate_voice">استنساخ صوت جديد</string>
     <string name="btn_test_voice_audition">معاينة الصوت</string>
     <string name="btn_open_full_player">المشغل</string>
 

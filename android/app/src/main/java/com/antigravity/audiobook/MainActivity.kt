@@ -1,9 +1,13 @@
 package com.antigravity.audiobook
 
+import android.Manifest
 import android.app.AlertDialog
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
+import com.antigravity.audiobook.util.AudioRecorderHelper
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.MediaPlayer
@@ -113,6 +117,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnSelectCharacterVoice: Button
     private lateinit var btnTestVoiceAudition: Button
     private lateinit var btnCreateCustomVoice: Button
+    private lateinit var btnReplicateVoice: Button
     private lateinit var btnSyncCustomVoices: Button
 
     // Tab 4: Settings Views
@@ -142,6 +147,33 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         if (uri != null) {
             importAndProcessBook(uri)
         }
+    }
+
+    private var onAudioPickedCallback: ((ByteArray, String) -> Unit)? = null
+    private val audioPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                val name = getFileNameFromUri(uri) ?: "audio"
+                if (bytes != null && bytes.isNotEmpty()) {
+                    onAudioPickedCallback?.invoke(bytes, name)
+                } else {
+                    Toast.makeText(this, "الملف الصوتي فارغ أو تعذر قراءته", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read audio file: ${e.message}")
+                Toast.makeText(this, "تعذر قراءة الملف: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private var onRecordAudioPermissionResult: ((Boolean) -> Unit)? = null
+    private val requestRecordAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        onRecordAudioPermissionResult?.invoke(isGranted)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -198,6 +230,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectCharacterVoice = findViewById(R.id.btnSelectCharacterVoice)
         btnTestVoiceAudition = findViewById(R.id.btnTestVoiceAudition)
         btnCreateCustomVoice = findViewById(R.id.btnCreateCustomVoice)
+        btnReplicateVoice = findViewById(R.id.btnReplicateVoice)
         btnSyncCustomVoices = findViewById(R.id.btnSyncCustomVoices)
 
         // Settings Views
@@ -344,6 +377,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         btnCreateCustomVoice.setOnClickListener {
             showVoiceDesignDialog()
+        }
+
+        btnReplicateVoice.setOnClickListener {
+            showVoiceReplicationDialog()
         }
 
         btnSyncCustomVoices.setOnClickListener {
@@ -503,7 +540,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         val displayItems = mutableListOf<String>()
         for (v in customVoices) {
-            displayItems.add("⭐ [صوت مصمم] ${v.displayNameArabic}")
+            val badge = if (v.descriptionArabic.contains("مستنسخ") || v.descriptionArabic.contains("Replicated")) "[مستنسخ]" else "[مصمم]"
+            displayItems.add("⭐ $badge ${v.displayNameArabic}")
         }
         for (v in VoiceProfile.PREBUILT_VOICES) {
             displayItems.add("${v.displayNameArabic} (${v.descriptionArabic})")
@@ -547,7 +585,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         val displayItems = mutableListOf<String>()
         for (v in customVoices) {
-            displayItems.add("⭐ [صوت مصمم] ${v.displayNameArabic}")
+            val badge = if (v.descriptionArabic.contains("مستنسخ") || v.descriptionArabic.contains("Replicated")) "[مستنسخ]" else "[مصمم]"
+            displayItems.add("⭐ $badge ${v.displayNameArabic}")
         }
         for (v in VoiceProfile.PREBUILT_VOICES) {
             displayItems.add("${v.displayNameArabic} (${v.descriptionArabic})")
@@ -786,6 +825,283 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             .show()
     }
 
+    private fun showVoiceReplicationDialog() {
+        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        if (apiKey.isBlank() || apiKey.length < 15) {
+            announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
+            Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
+            bottomNav.selectedItemId = R.id.tab_settings
+            return
+        }
+
+        val dialogView = layoutInflater.inflate(R.layout.dialog_voice_replication, null)
+        val editVoiceName = dialogView.findViewById<EditText>(R.id.editReplicationVoiceName)
+        val textRefAudioStatus = dialogView.findViewById<TextView>(R.id.textRefAudioStatus)
+        val btnRecordRefAudio = dialogView.findViewById<Button>(R.id.btnRecordRefAudio)
+        val btnPickRefAudio = dialogView.findViewById<Button>(R.id.btnPickRefAudio)
+        val btnPlayRefAudio = dialogView.findViewById<Button>(R.id.btnPlayRefAudio)
+
+        val btnCopyConsent = dialogView.findViewById<Button>(R.id.btnCopyConsent)
+        val textConsentAudioStatus = dialogView.findViewById<TextView>(R.id.textConsentAudioStatus)
+        val btnRecordConsentAudio = dialogView.findViewById<Button>(R.id.btnRecordConsentAudio)
+        val btnPickConsentAudio = dialogView.findViewById<Button>(R.id.btnPickConsentAudio)
+        val btnPlayConsentAudio = dialogView.findViewById<Button>(R.id.btnPlayConsentAudio)
+
+        val btnSubmitReplication = dialogView.findViewById<Button>(R.id.btnSubmitReplication)
+        val btnCancelReplication = dialogView.findViewById<Button>(R.id.btnCancelReplication)
+
+        val recorderHelper = AudioRecorderHelper(this)
+        var refAudioBytes: ByteArray? = null
+        var consentAudioBytes: ByteArray? = null
+        val refAudioFile = File(cacheDir, "ref_voice_sample.wav")
+        val consentAudioFile = File(cacheDir, "consent_voice_sample.wav")
+
+        var isRecordingRef = false
+        var isRecordingConsent = false
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        dialog.setOnDismissListener {
+            recorderHelper.release()
+        }
+
+        // Copy consent statement
+        val consentPhraseText = "I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model."
+        btnCopyConsent.setOnClickListener {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Google Consent Statement", consentPhraseText)
+            clipboard.setPrimaryClip(clip)
+            announceStatus("تم نسخ عبارة إقرار الموافقة إلى الحافظة")
+            Toast.makeText(this, "تم نسخ عبارة الموافقة بنجاح", Toast.LENGTH_SHORT).show()
+        }
+
+        // 1. Reference Audio Recording
+        val startRecordingRef = {
+            if (isRecordingConsent) {
+                recorderHelper.stopRecording()
+                isRecordingConsent = false
+                btnRecordConsentAudio.text = "تسجيل الموافقة"
+            }
+            refAudioFile.delete()
+            val started = recorderHelper.startRecording(refAudioFile) { elapsed ->
+                btnRecordRefAudio.text = "إيقاف ($elapsed ث)"
+            }
+            if (started) {
+                isRecordingRef = true
+                textRefAudioStatus.text = "جارِ التسجيل... تحدث بنبرتك الطبيعية لمدة 10-30 ثانية"
+                textRefAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                announceStatus("بدأ تسجيل عينة الصوت. تحدث الآن بنبرتك الطبيعية لمدة 10 إلى 30 ثانية.")
+            } else {
+                Toast.makeText(this, "تعذر بدء التسجيل، تأكد من إذن الميكروفون", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnRecordRefAudio.setOnClickListener {
+            if (!isRecordingRef) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    startRecordingRef()
+                } else {
+                    onRecordAudioPermissionResult = { granted ->
+                        if (granted) startRecordingRef()
+                        else Toast.makeText(this, "إذن الميكروفون مطلوب لتسجيل الصوت", Toast.LENGTH_SHORT).show()
+                    }
+                    requestRecordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            } else {
+                val wav = recorderHelper.stopRecording()
+                isRecordingRef = false
+                btnRecordRefAudio.text = "إعادة التسجيل"
+                if (wav != null && wav.exists() && wav.length() > 0) {
+                    refAudioBytes = wav.readBytes()
+                    val kb = refAudioBytes!!.size / 1024
+                    textRefAudioStatus.text = "تم تسجيل العينة بنجاح ($kb ك.ب)"
+                    textRefAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                    btnPlayRefAudio.visibility = View.VISIBLE
+                    announceStatus("تم إيقاف التسجيل وحفظ العينة بنجاح، الحجم $kb كيلوبايت")
+                } else {
+                    textRefAudioStatus.text = "لم يتم التقاط صوت كافٍ، حاول مجدداً"
+                }
+            }
+        }
+
+        btnPickRefAudio.setOnClickListener {
+            onAudioPickedCallback = { bytes, fileName ->
+                refAudioBytes = bytes
+                val kb = bytes.size / 1024
+                textRefAudioStatus.text = "تم اختيار ملف: $fileName ($kb ك.ب)"
+                textRefAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                try {
+                    refAudioFile.writeBytes(bytes)
+                    btnPlayRefAudio.visibility = View.VISIBLE
+                } catch (_: Exception) {}
+                announceStatus("تم اختيار ملف عينة الصوت بنجاح: $fileName")
+            }
+            audioPickerLauncher.launch(arrayOf("audio/*", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4"))
+        }
+
+        btnPlayRefAudio.setOnClickListener {
+            if (recorderHelper.isPlaying()) {
+                recorderHelper.stopPlayback()
+                btnPlayRefAudio.text = "معاينة عينة الصوت"
+            } else {
+                if (refAudioFile.exists()) {
+                    btnPlayRefAudio.text = "إيقاف المعاينة"
+                    recorderHelper.playAudio(refAudioFile) {
+                        btnPlayRefAudio.text = "معاينة عينة الصوت"
+                    }
+                }
+            }
+        }
+
+        // 2. Consent Audio Recording
+        val startRecordingConsent = {
+            if (isRecordingRef) {
+                recorderHelper.stopRecording()
+                isRecordingRef = false
+                btnRecordRefAudio.text = "تسجيل العينة"
+            }
+            consentAudioFile.delete()
+            val started = recorderHelper.startRecording(consentAudioFile) { elapsed ->
+                btnRecordConsentAudio.text = "إيقاف ($elapsed ث)"
+            }
+            if (started) {
+                isRecordingConsent = true
+                textConsentAudioStatus.text = "جارِ التسجيل... اقرأ نص الموافقة الإنجليزي بصوتك"
+                textConsentAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                announceStatus("بدأ تسجيل إقرار الموافقة. اقرأ الآن العبارة الإنجليزية بصوتك.")
+            } else {
+                Toast.makeText(this, "تعذر بدء التسجيل", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnRecordConsentAudio.setOnClickListener {
+            if (!isRecordingConsent) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    startRecordingConsent()
+                } else {
+                    onRecordAudioPermissionResult = { granted ->
+                        if (granted) startRecordingConsent()
+                        else Toast.makeText(this, "إذن الميكروفون مطلوب لتسجيل الصوت", Toast.LENGTH_SHORT).show()
+                    }
+                    requestRecordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            } else {
+                val wav = recorderHelper.stopRecording()
+                isRecordingConsent = false
+                btnRecordConsentAudio.text = "إعادة التسجيل"
+                if (wav != null && wav.exists() && wav.length() > 0) {
+                    consentAudioBytes = wav.readBytes()
+                    val kb = consentAudioBytes!!.size / 1024
+                    textConsentAudioStatus.text = "تم تسجيل الموافقة بنجاح ($kb ك.ب)"
+                    textConsentAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                    btnPlayConsentAudio.visibility = View.VISIBLE
+                    announceStatus("تم إيقاف التسجيل وحفظ إقرار الموافقة بنجاح")
+                } else {
+                    textConsentAudioStatus.text = "لم يتم التقاط تسجيل الموافقة، حاول مجدداً"
+                }
+            }
+        }
+
+        btnPickConsentAudio.setOnClickListener {
+            onAudioPickedCallback = { bytes, fileName ->
+                consentAudioBytes = bytes
+                val kb = bytes.size / 1024
+                textConsentAudioStatus.text = "تم اختيار ملف: $fileName ($kb ك.ب)"
+                textConsentAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                try {
+                    consentAudioFile.writeBytes(bytes)
+                    btnPlayConsentAudio.visibility = View.VISIBLE
+                } catch (_: Exception) {}
+                announceStatus("تم اختيار ملف إقرار الموافقة بنجاح: $fileName")
+            }
+            audioPickerLauncher.launch(arrayOf("audio/*", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4"))
+        }
+
+        btnPlayConsentAudio.setOnClickListener {
+            if (recorderHelper.isPlaying()) {
+                recorderHelper.stopPlayback()
+                btnPlayConsentAudio.text = "معاينة تسجيل الموافقة"
+            } else {
+                if (consentAudioFile.exists()) {
+                    btnPlayConsentAudio.text = "إيقاف المعاينة"
+                    recorderHelper.playAudio(consentAudioFile) {
+                        btnPlayConsentAudio.text = "معاينة تسجيل الموافقة"
+                    }
+                }
+            }
+        }
+
+        // Submit Replication
+        btnSubmitReplication.setOnClickListener {
+            val voiceName = editVoiceName.text.toString().trim()
+            if (voiceName.isBlank()) {
+                announceStatus("يرجى إدخال اسم الصوت المستنسخ أولاً")
+                Toast.makeText(this, "يرجى إدخال اسم الصوت", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val refBytes = refAudioBytes
+            if (refBytes == null || refBytes.isEmpty()) {
+                announceStatus("عينة الصوت الأساسية مطلوبة، يرجى تسجيلها أو اختيار ملف")
+                Toast.makeText(this, "يرجى تجهيز عينة الصوت الأساسية", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val consentBytes = consentAudioBytes
+            if (consentBytes == null || consentBytes.isEmpty()) {
+                announceStatus("تسجيل إقرار الموافقة إلزامي، يرجى تسجيل قراءة العبارة")
+                Toast.makeText(this, "يرجى تجهيز تسجيل إقرار الموافقة", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            recorderHelper.release()
+            btnSubmitReplication.isEnabled = false
+            btnSubmitReplication.text = "جارِ الاستنساخ والمطابقة..."
+            announceStatus("جارِ إرسال العينات ومطابقة البصمة واستنساخ الصوت عبر Gemini 3.8 Flash TTS... يرجى الانتظار")
+            Toast.makeText(this, "جارِ استنساخ الصوت عبر الذكاء الاصطناعي... يرجى الانتظار", Toast.LENGTH_SHORT).show()
+
+            val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+            lifecycleScope.launch {
+                try {
+                    val client = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+                    val (voiceId, sampleBytes) = client.replicateCustomVoice(voiceName, refBytes, consentBytes)
+                    val newProfile = VoiceProfile(
+                        id = voiceId,
+                        displayNameArabic = "$voiceName ($voiceId)",
+                        isCustomVoiceDesign = true,
+                        descriptionArabic = "صوت مستنسخ بالذكاء الاصطناعي (Replicated Voice)"
+                    )
+                    customVoices.removeAll { it.id.equals(voiceId, ignoreCase = true) }
+                    customVoices.add(0, newProfile)
+                    saveCustomVoicesToPrefs(customVoices)
+                    settingsPrefs.edit().putString(KEY_GEMINI_VOICE, voiceId).apply()
+                    updateStudioUI()
+                    announceStatus("تم استنساخ الصوت بنجاح وحفظه وتفعيله كصوت للراوي!")
+                    Toast.makeText(this@MainActivity, "تم استنساخ الصوت وحفظه في قائمتك بنجاح!", Toast.LENGTH_LONG).show()
+                    dialog.dismiss()
+
+                    sampleBytes?.let { bytes ->
+                        val sampleFile = File(cacheDir, "sample_replicated_$voiceId.wav")
+                        client.saveAudioAtomically(sampleFile, bytes)
+                        playAudioFileDirectly(sampleFile)
+                    }
+                } catch (e: Exception) {
+                    btnSubmitReplication.isEnabled = true
+                    btnSubmitReplication.text = "بدء الاستنساخ وحفظ الصوت"
+                    Log.e(TAG, "Voice replication failed: ${e.message}")
+                    announceStatus("تعذر استنساخ الصوت: ${e.localizedMessage ?: e.message}")
+                    Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        btnCancelReplication.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
     // -------------------------------------------------------------------------
     // Settings Tab Management
     // -------------------------------------------------------------------------
@@ -805,9 +1121,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.8"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.9"
         } catch (e: Exception) {
-            "1.1.8"
+            "1.1.9"
         }
         textAppVersion.text = "الإصدار: $currentVer"
     }
@@ -1387,9 +1703,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.8"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.9"
                 } catch (e: Exception) {
-                    "1.1.8"
+                    "1.1.9"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {

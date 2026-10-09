@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/bg_dark"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="استنساخ صوت جديد"
+            android:textColor="@color/primary_accessible"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="استنساخ صوت حقيقي بمطابقة البصمة الصوتية عبر Gemini 3.8 Flash TTS"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <!-- 1. Voice Name Input -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="اسم الصوت المستنسخ:"
+            android:textColor="@color/text_high_contrast"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/editReplicationVoiceName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="4dp"
+            android:hint="مثال: صوت أحمد"
+            android:contentDescription="حقل إدخال اسم الصوت المستنسخ"
+            android:textColor="@color/text_high_contrast"
+            android:textColorHint="@color/text_secondary"
+            android:background="@color/surface_dark"
+            android:padding="10dp"
+            android:inputType="textPersonName" />
+
+        <!-- 2. Reference Audio Section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="1. عينة الصوت الأساسية (10 إلى 30 ثانية):"
+            android:textColor="@color/text_high_contrast"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textRefAudioStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="لم يتم تسجيل أو اختيار العينة بعد"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnRecordRefAudio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:text="تسجيل العينة"
+                android:contentDescription="تسجيل عينة الصوت الأساسية من الميكروفون"
+                android:textColor="@color/on_primary"
+                android:backgroundTint="@color/primary_accessible" />
+
+            <Button
+                android:id="@+id/btnPickRefAudio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:minHeight="48dp"
+                android:text="اختيار ملف"
+                android:contentDescription="اختيار ملف صوتي من الجهاز كعينة أساسية"
+                android:textColor="@color/accent_control"
+                android:backgroundTint="@color/surface_dark" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnPlayRefAudio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone"
+            android:text="معاينة عينة الصوت"
+            android:contentDescription="تشغيل ومعاينة عينة الصوت الأساسية المسجلة"
+            android:textColor="@color/text_high_contrast"
+            android:backgroundTint="@color/divider_color" />
+
+        <!-- 3. Consent Audio Section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="2. تسجيل إقرار الموافقة الصوتي (إلزامي):"
+            android:textColor="@color/text_high_contrast"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@color/surface_dark"
+            android:padding="12dp"
+            android:layout_marginTop="6dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="اقرأ العبارة التالية بصوتك بالإنجليزية:"
+                android:textColor="@color/accent_control"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/textConsentPhrase"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="&quot;I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.&quot;"
+                android:textColor="@color/text_high_contrast"
+                android:textSize="14sp"
+                android:textStyle="italic" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="(المعنى: أنا صاحب هذا الصوت وأوافق على استخدام Google له لإنشاء نموذج صوتي اصطناعي)"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnCopyConsent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="44dp"
+                android:text="نسخ العبارة"
+                android:contentDescription="نسخ عبارة الموافقة باللغة الإنجليزية إلى الحافظة"
+                android:textColor="@color/accent_control"
+                android:backgroundTint="@color/divider_color" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textConsentAudioStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="لم يتم تسجيل أو اختيار إقرار الموافقة بعد"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnRecordConsentAudio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:text="تسجيل الموافقة"
+                android:contentDescription="تسجيل قراءة إقرار الموافقة من الميكروفون"
+                android:textColor="@color/on_primary"
+                android:backgroundTint="@color/primary_accessible" />
+
+            <Button
+                android:id="@+id/btnPickConsentAudio"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:minHeight="48dp"
+                android:text="اختيار ملف"
+                android:contentDescription="اختيار ملف تسجيل الموافقة من الجهاز"
+                android:textColor="@color/accent_control"
+                android:backgroundTint="@color/surface_dark" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnPlayConsentAudio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone"
+            android:text="معاينة تسجيل الموافقة"
+            android:contentDescription="تشغيل ومعاينة تسجيل إقرار الموافقة"
+            android:textColor="@color/text_high_contrast"
+            android:backgroundTint="@color/divider_color" />
+
+        <!-- 4. Action Buttons -->
+        <Button
+            android:id="@+id/btnSubmitReplication"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="52dp"
+            android:layout_marginTop="24dp"
+            android:text="بدء الاستنساخ وحفظ الصوت"
+            android:contentDescription="إرسال العينة والموافقة وبدء استنساخ الصوت عبر الذكاء الاصطناعي"
+            android:textColor="@color/on_primary"
+            android:backgroundTint="@color/primary_accessible" />
+
+        <Button
+            android:id="@+id/btnCancelReplication"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/action_cancel"
+            android:contentDescription="إلغاء نافذة استنساخ الصوت"
+            android:textColor="@color/text_secondary"
+            android:backgroundTint="@color/surface_dark" />
+
+    </LinearLayout>
+</ScrollView>
