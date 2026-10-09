@@ -1,12 +1,15 @@
 package com.antigravity.audiobook
 
 import android.app.AlertDialog
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.MediaPlayer
 import android.net.Uri
+import android.text.Editable
+import android.text.TextWatcher
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -84,6 +87,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     // Tab 1: Library Views
     private lateinit var btnAddBook: Button
+    private lateinit var btnPasteText: Button
     private lateinit var listViewBooks: ListView
     private lateinit var textEmptyBooks: TextView
     private lateinit var textNowPlayingTitle: TextView
@@ -168,6 +172,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         // Library Views
         btnAddBook = findViewById(R.id.btnAddBook)
+        btnPasteText = findViewById(R.id.btnPasteText)
         listViewBooks = findViewById(R.id.listViewBooks)
         textEmptyBooks = findViewById(R.id.textEmptyBooks)
         textNowPlayingTitle = findViewById(R.id.textNowPlayingTitle)
@@ -254,6 +259,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 Log.e(TAG, "Error launching file picker: ${e.message}")
                 Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        btnPasteText.setOnClickListener {
+            showPasteTextDialog()
         }
 
         btnPlayPauseMini.setOnClickListener {
@@ -796,11 +805,11 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectModel.text = "النموذج المعتمد: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.5"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.6"
         } catch (e: Exception) {
-            "1.1.5"
+            "1.1.6"
         }
-        textAppVersion.text = "الإصدار الحالي: $currentVer (موقع بالمفتاح الدائم)"
+        textAppVersion.text = "الإصدار الحالي: $currentVer"
     }
 
     private fun showApiKeyEditDialog() {
@@ -1017,6 +1026,103 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         booksAdapter.notifyDataSetChanged()
         textEmptyBooks.visibility = if (booksList.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    private fun showPasteTextDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_paste_text, null, false)
+        val textActiveVoiceSettings = dialogView.findViewById<TextView>(R.id.textActiveVoiceSettings)
+        val editPasteTitle = dialogView.findViewById<EditText>(R.id.editPasteTitle)
+        val btnPasteFromClipboard = dialogView.findViewById<Button>(R.id.btnPasteFromClipboard)
+        val editPasteContent = dialogView.findViewById<EditText>(R.id.editPasteContent)
+        val textPasteCharCount = dialogView.findViewById<TextView>(R.id.textPasteCharCount)
+
+        val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
+        val narratorProfile = getVoiceProfile(narratorId)
+        val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
+        val stylePreset = VoiceStylePreset.fromId(styleId)
+        val isMulti = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
+        val multiInfo = if (isMulti) " | الحوار متعدد" else ""
+
+        textActiveVoiceSettings.text = "الصوت النشط: ${narratorProfile.displayNameArabic} (${stylePreset.titleArabic})$multiInfo"
+
+        val updateCount = {
+            val len = editPasteContent.text?.length ?: 0
+            textPasteCharCount.text = "عدد الحروف: $len"
+        }
+
+        editPasteContent.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateCount()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        btnPasteFromClipboard.setOnClickListener {
+            try {
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                val clip = clipboard?.primaryClip
+                if (clip != null && clip.itemCount > 0) {
+                    val itemText = clip.getItemAt(0)?.coerceToText(this)?.toString() ?: ""
+                    if (itemText.isNotBlank()) {
+                        editPasteContent.setText(itemText)
+                        editPasteContent.setSelection(itemText.length)
+                        updateCount()
+                        announceStatus("تم لصق ${itemText.length} حرفاً من الحافظة")
+                        Toast.makeText(this, "تم لصق النص بنجاح", Toast.LENGTH_SHORT).show()
+                    } else {
+                        announceStatus("الحافظة لا تحتوي على نص")
+                        Toast.makeText(this, "الحافظة فارغة", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    announceStatus("الحافظة فارغة")
+                    Toast.makeText(this, "الحافظة فارغة", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error accessing clipboard: ${e.message}")
+                Toast.makeText(this, "تعذر قراءة الحافظة", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_paste_text)
+            .setView(dialogView)
+            .setPositiveButton("تحويل وحفظ في المكتبة") { _, _ ->
+                val content = editPasteContent.text.toString().trim()
+                if (content.isBlank()) {
+                    announceStatus("يرجى إدخال أو لصق نص للتحويل")
+                    Toast.makeText(this, "النص فارغ! يرجى إدخال نص أولاً", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+
+                val customTitle = editPasteTitle.text.toString().trim()
+                val finalTitle = if (customTitle.isNotBlank()) {
+                    customTitle
+                } else {
+                    val snippet = content.take(30).replace(Regex("[\\r\\n]+"), " ").trim()
+                    if (snippet.isNotBlank()) {
+                        "مقطع - $snippet"
+                    } else {
+                        "مقطع_${System.currentTimeMillis()}"
+                    }
+                }
+
+                val safeDirName = finalTitle.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_").take(45)
+                val bookDir = File(File(filesDir, "audiobooks"), safeDirName)
+
+                val tempFile = File(cacheDir, "pasted_${System.currentTimeMillis()}.txt")
+                try {
+                    tempFile.writeText(content, Charsets.UTF_8)
+                    announceStatus("بدء تحويل النص المنسوخ إلى كتاب صوتي في المكتبة...")
+                    startBookProcessing(tempFile, bookDir, finalTitle)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving pasted text: ${e.message}", e)
+                    announceStatus("فشل حفظ النص: ${e.message}")
+                    Toast.makeText(this, "خطأ في المعالجة", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
     }
 
     private fun importAndProcessBook(uri: Uri) {

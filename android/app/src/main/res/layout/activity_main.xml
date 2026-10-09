@@ -57,6 +57,18 @@
                     android:textStyle="bold" />
 
                 <Button
+                    android:id="@+id/btnPasteText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:minWidth="48dp"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/action_paste_text"
+                    android:contentDescription="@string/action_paste_text"
+                    android:textColor="@color/accent_control"
+                    android:backgroundTint="@color/divider_color" />
+
+                <Button
                     android:id="@+id/btnAddBook"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -325,14 +337,6 @@
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="@string/desc_studio"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
-
                 <!-- 1. Narrator Voice Selector -->
                 <TextView
                     android:layout_width="match_parent"
@@ -384,14 +388,6 @@
                     android:textColor="@color/text_high_contrast"
                     android:textSize="16sp"
                     android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/desc_multi_speaker"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp" />
 
                 <Button
                     android:id="@+id/btnToggleMultiSpeaker"
@@ -567,7 +563,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="تحديثات التطبيق والتثبيت التلقائي"
+                        android:text="تحديثات التطبيق"
                         android:textColor="@color/text_high_contrast"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -577,7 +573,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="الإصدار الحالي: 1.1.5 (موقع بالمفتاح الدائم)"
+                        android:text="الإصدار الحالي: 1.1.6"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp" />
 
@@ -587,38 +583,10 @@
                         android:layout_height="wrap_content"
                         android:minHeight="48dp"
                         android:layout_marginTop="12dp"
-                        android:text="فحص التحديثات وتثبيت الجديد"
-                        android:contentDescription="زر فحص وجود تحديث جديد للتطبيق وتثبيته تلقائياً فوق الإصدار الحالي"
+                        android:text="فحص التحديثات"
+                        android:contentDescription="زر فحص وجود تحديث جديد للتطبيق وتثبيته تلقائياً"
                         android:textColor="@color/on_primary"
                         android:backgroundTint="@color/primary_accessible" />
-
-                </LinearLayout>
-
-                <!-- Accessibility Notes Card -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:background="@color/surface_dark"
-                    android:padding="16dp"
-                    android:layout_marginTop="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/label_accessibility_notes"
-                        android:textColor="@color/primary_accessible"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="@string/desc_accessibility_notes"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="14sp"
-                        android:lineSpacingExtra="4dp" />
 
                 </LinearLayout>
 
