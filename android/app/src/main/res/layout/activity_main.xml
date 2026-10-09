@@ -412,6 +412,18 @@
                     android:textColor="@color/text_high_contrast"
                     android:backgroundTint="@color/surface_dark" />
 
+                <Button
+                    android:id="@+id/btnMultiSpeakerHelp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone"
+                    android:text="دليل صيغة الحوار"
+                    android:contentDescription="شرح طريقة كتابة الحوار المتعدد لنموذج جوجل"
+                    android:textColor="@color/accent_control"
+                    android:backgroundTint="@color/divider_color" />
+
                 <!-- 4. Audition & Voice Design Buttons -->
                 <Button
                     android:id="@+id/btnTestVoiceAudition"
@@ -584,7 +596,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:text="الإصدار: 1.1.9"
+                        android:text="الإصدار: 1.2.0"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp" />
 

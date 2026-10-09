@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnSelectVoiceStyle: Button
     private lateinit var btnToggleMultiSpeaker: Button
     private lateinit var btnSelectCharacterVoice: Button
+    private lateinit var btnMultiSpeakerHelp: Button
     private lateinit var btnTestVoiceAudition: Button
     private lateinit var btnCreateCustomVoice: Button
     private lateinit var btnReplicateVoice: Button
@@ -228,6 +229,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectVoiceStyle = findViewById(R.id.btnSelectVoiceStyle)
         btnToggleMultiSpeaker = findViewById(R.id.btnToggleMultiSpeaker)
         btnSelectCharacterVoice = findViewById(R.id.btnSelectCharacterVoice)
+        btnMultiSpeakerHelp = findViewById(R.id.btnMultiSpeakerHelp)
         btnTestVoiceAudition = findViewById(R.id.btnTestVoiceAudition)
         btnCreateCustomVoice = findViewById(R.id.btnCreateCustomVoice)
         btnReplicateVoice = findViewById(R.id.btnReplicateVoice)
@@ -369,6 +371,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         btnSelectCharacterVoice.setOnClickListener {
             showCharacterVoicePicker()
+        }
+
+        btnMultiSpeakerHelp.setOnClickListener {
+            showMultiSpeakerHelpDialog()
         }
 
         btnTestVoiceAudition.setOnClickListener {
@@ -526,6 +532,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnToggleMultiSpeaker.text = if (isMultiSpeaker) "الحوار: مفعّل" else "الحوار: معطّل"
         btnToggleMultiSpeaker.contentDescription = "الحوار المتعدد: ${if (isMultiSpeaker) "مفعل" else "معطل"}"
         btnSelectCharacterVoice.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
+        btnMultiSpeakerHelp.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
 
         val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
         val characterProfile = getVoiceProfile(characterId)
@@ -685,7 +692,37 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val updated = !current
         settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, updated).apply()
         updateStudioUI()
-        announceStatus(if (updated) "تم تفعيل الحوار متعدد الرواة" else "تم تعطيل الحوار متعدد الرواة")
+        announceStatus(if (updated) "تم تفعيل الحوار متعدد الرواة. يمكنك الضغط على دليل صيغة الحوار لمعرفة النماذج." else "تم تعطيل الحوار متعدد الرواة")
+    }
+
+    private fun showMultiSpeakerHelpDialog() {
+        val sampleDialogue = """Speaker1: مرحباً يا أحمد، أهلاً بك في تجربة الحوار الصوتي بالذكاء الاصطناعي.
+Speaker2: أهلاً بك يا صديقي! هل يتغير الصوت تلقائياً الآن بحسب المتحدث؟
+Speaker1: نعم تماماً، هذا نموذج الحوار الرسمي لنموذج Gemini 3.8 Flash TTS.
+Speaker2: رائع جداً، الصوتان يبدوان طبيعيين ومنسجمين تماماً!"""
+
+        AlertDialog.Builder(this)
+            .setTitle("دليل صيغة الحوار (Google Gemini)")
+            .setMessage("""يدعم محرك Gemini 3.8 Flash TTS صيغتين رسميتين للحوار:
+
+1. صيغة السيناريو والبودكاست (صيغة Google المعتمدة):
+اكتب اسم المتحدث في أول كل سطر يليه نقطتان (:):
+Speaker1: مرحباً بك يا أحمد
+Speaker2: أهلاً بك يا صديقي
+
+2. صيغة الروايات والقصص:
+اجعل كلام الشخصيات بين علامتي تنصيص «...» أو "..." وباقي السرد للراوي:
+قال الراوي: «السلام عليكم» فاستمع الجميع.
+""")
+            .setPositiveButton("نسخ نموذج تجريبي") { _, _ ->
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("Dialogue Sample", sampleDialogue)
+                clipboard.setPrimaryClip(clip)
+                announceStatus("تم نسخ نموذج الحوار التجريبي إلى الحافظة بنجاح")
+                Toast.makeText(this, "تم نسخ النموذج إلى الحافظة بنجاح", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("إغلاق", null)
+            .show()
     }
 
     private fun testCurrentAudition() {
@@ -715,7 +752,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                             narratorVoice = VoiceProfile.fromStoredString(narratorId),
                             characterVoice = VoiceProfile.fromStoredString(characterId)
                         )
-                        val text = "قال الراوي بصوت وقور ومدروس: «أهلاً بكم في عالم الكتب الصوتية الذكية». فأصغى الجميع في اهتمام."
+                        val text = """Speaker1: مرحباً يا أحمد، هذا فحص واختبار لصوت الراوي بنمط ${stylePreset.titleArabic}.
+Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصيات، للتأكد من سلاسة الحوار بين الصوتين."""
                         client.synthesize(text, voiceName = narratorId, stylePreset = stylePreset, multiSpeakerConfig = multiConfig)
                     } else {
                         val text = "مرحباً يا أحمد، هذا فحص واختبار لصوت جيميني بالذكاء الاصطناعي بنمط ${stylePreset.titleArabic}."
@@ -1121,9 +1159,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.9"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0"
         } catch (e: Exception) {
-            "1.1.9"
+            "1.2.0"
         }
         textAppVersion.text = "الإصدار: $currentVer"
     }
@@ -1349,8 +1387,12 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val textActiveVoiceSettings = dialogView.findViewById<TextView>(R.id.textActiveVoiceSettings)
         val editPasteTitle = dialogView.findViewById<EditText>(R.id.editPasteTitle)
         val btnPasteFromClipboard = dialogView.findViewById<Button>(R.id.btnPasteFromClipboard)
+        val btnInsertDialogueTemplate = dialogView.findViewById<Button>(R.id.btnInsertDialogueTemplate)
         val editPasteContent = dialogView.findViewById<EditText>(R.id.editPasteContent)
         val textPasteCharCount = dialogView.findViewById<TextView>(R.id.textPasteCharCount)
+        val textDialogueDetectionStatus = dialogView.findViewById<TextView>(R.id.textDialogueDetectionStatus)
+
+        val annotator = DialogueTurnAnnotator()
 
         val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
         val narratorProfile = getVoiceProfile(narratorId)
@@ -1366,10 +1408,27 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             textPasteCharCount.text = "عدد الحروف: $len"
         }
 
+        val updateDialogueStatus = {
+            val content = editPasteContent.text?.toString() ?: ""
+            if (content.isBlank()) {
+                textDialogueDetectionStatus.text = "نوع النص: لم يتم إدخال نص بعد"
+                textDialogueDetectionStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            } else {
+                val summary = annotator.summarizeText(content)
+                textDialogueDetectionStatus.text = "التعرف الصوتي: $summary"
+                if (summary.contains("حوار ثنائي")) {
+                    textDialogueDetectionStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
+                } else {
+                    textDialogueDetectionStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+                }
+            }
+        }
+
         editPasteContent.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 updateCount()
+                updateDialogueStatus()
             }
             override fun afterTextChanged(s: Editable?) {}
         })
@@ -1384,7 +1443,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                         editPasteContent.setText(itemText)
                         editPasteContent.setSelection(itemText.length)
                         updateCount()
-                        announceStatus("تم لصق ${itemText.length} حرفاً من الحافظة")
+                        updateDialogueStatus()
+                        announceStatus("تم لصق ${itemText.length} حرفاً من الحافظة. ${annotator.summarizeText(itemText)}")
                         Toast.makeText(this, "تم لصق النص بنجاح", Toast.LENGTH_SHORT).show()
                     } else {
                         announceStatus("الحافظة لا تحتوي على نص")
@@ -1400,6 +1460,25 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             }
         }
 
+        btnInsertDialogueTemplate.setOnClickListener {
+            val sampleDialogue = """Speaker1: مرحباً يا أحمد في تجربة الحوار الصوتي متعدد المتحدثين.
+Speaker2: أهلاً بك يا صديقي! هل يتغير الصوت تلقائياً الآن بحسب المتحدث؟
+Speaker1: نعم تماماً، هذا نموذج الحوار الرسمي المعتمد من Google Gemini.
+Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة للغاية!"""
+            editPasteContent.setText(sampleDialogue)
+            editPasteContent.setSelection(sampleDialogue.length)
+            if (!settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)) {
+                settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, true).apply()
+                updateStudioUI()
+                announceStatus("تم تفعيل الحوار متعدد الرواة تلقائياً وإدراج نموذج الحوار الرسمي")
+            } else {
+                announceStatus("تم إدراج نموذج الحوار الرسمي بنجاح")
+            }
+            updateCount()
+            updateDialogueStatus()
+            Toast.makeText(this, "تم إدراج نموذج الحوار بنجاح", Toast.LENGTH_SHORT).show()
+        }
+
         AlertDialog.Builder(this)
             .setTitle(R.string.action_paste_text)
             .setView(dialogView)
@@ -1409,6 +1488,13 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     announceStatus("يرجى إدخال أو لصق نص للتحويل")
                     Toast.makeText(this, "النص فارغ! يرجى إدخال نص أولاً", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
+                }
+
+                val summary = annotator.summarizeText(content)
+                if (summary.contains("حوار ثنائي") && !settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)) {
+                    settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, true).apply()
+                    updateStudioUI()
+                    announceStatus("تم اكتشاف حوار وتفعيل المتحدثين تلقائياً")
                 }
 
                 val customTitle = editPasteTitle.text.toString().trim()
@@ -1703,9 +1789,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.9"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0"
                 } catch (e: Exception) {
-                    "1.1.9"
+                    "1.2.0"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {

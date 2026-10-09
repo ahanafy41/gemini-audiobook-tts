@@ -42,17 +42,36 @@
             android:padding="12dp"
             android:singleLine="true" />
 
-        <!-- Paste from Clipboard Button -->
-        <Button
-            android:id="@+id/btnPasteFromClipboard"
+        <!-- Paste and Dialogue Template Buttons -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
             android:layout_marginTop="12dp"
-            android:text="لصق من الحافظة"
-            android:contentDescription="زر سحب ولصق النص المنسوخ من الحافظة مباشرة"
-            android:textColor="@color/on_primary"
-            android:backgroundTint="@color/primary_accessible" />
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPasteFromClipboard"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:text="لصق من الحافظة"
+                android:contentDescription="زر سحب ولصق النص المنسوخ من الحافظة مباشرة"
+                android:textColor="@color/on_primary"
+                android:backgroundTint="@color/primary_accessible" />
+
+            <Button
+                android:id="@+id/btnInsertDialogueTemplate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:minHeight="48dp"
+                android:text="نموذج حوار"
+                android:contentDescription="إدراج نموذج حوار تجريبي لمتحدثين اثنين"
+                android:textColor="@color/accent_control"
+                android:backgroundTint="@color/surface_dark" />
+        </LinearLayout>
 
         <!-- Content Input -->
         <TextView
@@ -81,7 +100,7 @@
             android:scrollbars="vertical"
             android:inputType="textMultiLine" />
 
-        <!-- Character Count Indicator -->
+        <!-- Character Count Indicator & Detection Status -->
         <TextView
             android:id="@+id/textPasteCharCount"
             android:layout_width="match_parent"
@@ -89,6 +108,15 @@
             android:layout_marginTop="8dp"
             android:text="عدد الحروف: 0"
             android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/textDialogueDetectionStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="نوع النص: فردي (الراوي)"
+            android:textColor="@color/accent_control"
             android:textSize="13sp" />
 
     </LinearLayout>
