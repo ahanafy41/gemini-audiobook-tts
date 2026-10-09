@@ -805,9 +805,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnSelectModel.text = "النموذج المعتمد: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.6"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.7"
         } catch (e: Exception) {
-            "1.1.6"
+            "1.1.7"
         }
         textAppVersion.text = "الإصدار الحالي: $currentVer"
     }
@@ -1381,13 +1381,13 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.5"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.7"
                 } catch (e: Exception) {
-                    "1.1.5"
+                    "1.1.7"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {
-                    val url = "https://api.github.com/repos/ahanafy41/gemini_audiobook_tts/releases/latest"
+                    val url = "https://api.github.com/repos/ahanafy41/gemini-audiobook-tts/releases/latest"
                     val client = OkHttpClient.Builder().build()
                     val request = Request.Builder()
                         .url(url)

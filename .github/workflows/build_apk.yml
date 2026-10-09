@@ -56,11 +56,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.1.6"
-          name: "Gemini Audiobook TTS v1.1.6 (APK)"
+          tag_name: "v1.1.7"
+          name: "Gemini Audiobook TTS v1.1.7 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.1.6
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.1.7
 
+            - **إصلاح مسار التحديث التلقائي الداخلي (Fix 404 In-App Update)**:
+              - تصحيح رابط مستودع GitHub في فحص التحديثات من `gemini_audiobook_tts` إلى `gemini-audiobook-tts` لحل خطأ 404.
             - **ميزة تحويل النصوص المنسوخة (Paste & Convert)**:
               - إضافة زر "لصق نص" في المكتبة لتحويل أي نص من الحافظة مباشرة إلى كتاب صوتي.
               - سحب تلقائي للإعدادات الأساسية (الراوي المختار، النمط الصوتي، النموذج).
