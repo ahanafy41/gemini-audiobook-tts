@@ -9,16 +9,16 @@
     <string name="action_pause">إيقاف مؤقت</string>
     <string name="action_rewind">إرجاع 15 ثانية</string>
     <string name="action_fast_forward">تقديم 30 ثانية</string>
-    <string name="action_prev_chapter">الفصل السابق</string>
-    <string name="action_next_chapter">الفصل التالي</string>
+    <string name="action_prev_chapter">السابق</string>
+    <string name="action_next_chapter">التالي</string>
     <string name="action_speed">السرعة: 1.0x</string>
-    <string name="label_no_books">المكتبة فارغة. اضغط إضافة كتاب أو لصق نص.</string>
-    <string name="label_mini_player">المشغل السريع</string>
-    <string name="dialog_enter_api_key">أدخل مفتاح Gemini API</string>
+    <string name="label_no_books">المكتبة فارغة</string>
+    <string name="label_mini_player">المشغل</string>
+    <string name="dialog_enter_api_key">مفتاح Gemini API</string>
     <string name="action_save">حفظ</string>
     <string name="action_cancel">إلغاء</string>
     <string name="hint_api_key">AIzaSy...</string>
-    <string name="status_synthesizing">جارِ توليد الصوت الذكي للفصول...</string>
+    <string name="status_synthesizing">جارِ توليد الصوت...</string>
     <string name="status_ready">جاهز للاستماع</string>
     <string name="confirm_delete_title">حذف الكتاب</string>
     <string name="confirm_delete_msg">هل تريد حذف هذا الكتاب وملفاته الصوتية؟</string>
@@ -31,29 +31,29 @@
     <string name="nav_settings">الإعدادات</string>
 
     <!-- Voice Studio -->
-    <string name="title_studio">استوديو الأصوات</string>
-    <string name="label_narrator_voice">صوت الراوي الأساسي</string>
+    <string name="title_studio">الأصوات</string>
+    <string name="label_narrator_voice">صوت الراوي</string>
     <string name="label_voice_style">نمط الإلقاء</string>
-    <string name="label_multi_speaker">الحوار متعدد الأصوات</string>
-    <string name="label_character_voice">صوت الشخصيات والحوار</string>
-    <string name="btn_create_custom_voice">تصميم صوت بالذكاء الاصطناعي</string>
-    <string name="btn_test_voice_audition">تجربة ومعاينة الصوت الحالي</string>
-    <string name="btn_open_full_player">الانتقال للمشغل الكامل</string>
+    <string name="label_multi_speaker">الحوار المتعدد</string>
+    <string name="label_character_voice">صوت الشخصيات</string>
+    <string name="btn_create_custom_voice">تصميم صوت جديد</string>
+    <string name="btn_test_voice_audition">معاينة الصوت</string>
+    <string name="btn_open_full_player">المشغل</string>
 
     <!-- Voice Design Dialog -->
     <string name="dialog_voice_design_title">تصميم صوت جديد</string>
-    <string name="dialog_voice_design_name_hint">اسم الصوت (مثال: راوٍ مصري رصين)</string>
-    <string name="dialog_voice_design_prompt_hint">أدخل وصف النبرة بالإنجليزية (مثال: Calm, deep resonant baritone, authoritative yet warm Egyptian accent)</string>
-    <string name="btn_generate_voice">توليد ومعاينة الصوت</string>
+    <string name="dialog_voice_design_name_hint">اسم الصوت (مثال: راوٍ مصري)</string>
+    <string name="dialog_voice_design_prompt_hint">وصف النبرة بالإنجليزية (مثال: Warm, deep resonant baritone, Egyptian accent)</string>
+    <string name="btn_generate_voice">توليد الصوت</string>
 
     <!-- Settings Tab -->
     <string name="title_settings_full">الإعدادات</string>
-    <string name="label_api_key_status">مفتاح Gemini API</string>
+    <string name="label_api_key_status">مفتاح API</string>
     <string name="btn_update_api_key">تعديل المفتاح</string>
     <string name="btn_test_api_connection">فحص الاتصال</string>
-    <string name="label_model_selection">نموذج الذكاء الاصطناعي</string>
-    <string name="btn_sync_custom_voices">مزامنة الأصوات المصممة</string>
-    <string name="label_enter_custom_voice_id">+ إدخال معرف صوت مخصص يدوياً (Voice ID)</string>
-    <string name="dialog_enter_voice_id_title">أدخل معرف الصوت المخصص</string>
+    <string name="label_model_selection">النموذج</string>
+    <string name="btn_sync_custom_voices">مزامنة الأصوات</string>
+    <string name="label_enter_custom_voice_id">+ إدخال معرف صوت يدوياً</string>
+    <string name="dialog_enter_voice_id_title">معرف الصوت</string>
     <string name="dialog_enter_voice_id_hint">مثال: voice_42n103zlznqt</string>
 </resources>

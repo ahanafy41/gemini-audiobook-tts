@@ -12,25 +12,25 @@ enum class VoiceStylePreset(
 ) {
     NATURAL(
         id = "natural",
-        titleArabic = "طبيعي ومتوازن (افتراضي)",
+        titleArabic = "طبيعي",
         descriptionArabic = "قراءة هادئة وواضحة تناسب معظم الكتب والمقالات العامة.",
         directorPrompt = "[Style: Natural, warm, balanced audiobook narration]"
     ),
     DOCUMENTARY(
         id = "documentary",
-        titleArabic = "وثائقي ورصين (Documentary)",
+        titleArabic = "وثائقي",
         descriptionArabic = "نبرة وقورة وموضوعية ذات إيقاع متزن، ممتازة للمراجع وكتب التاريخ والدراسات العلمية.",
         directorPrompt = "[Style: Authoritative, solemn historical documentary narration, grave baritone, deliberate and measured cadence]"
     ),
     DRAMATIC(
         id = "dramatic",
-        titleArabic = "درامي ومشوق (Dramatic Novel)",
+        titleArabic = "درامي",
         descriptionArabic = "نبرة تعبيرية غنية بالمشاعر والإثارة السينمائية، مثالية للروايات والقصص المشوقة.",
         directorPrompt = "[Style: Dramatic, cinematic, intense suspense, breathless anticipation and emotional charge]"
     ),
     CALM(
         id = "calm",
-        titleArabic = "هادئ ومريح (Calm / Bedtime)",
+        titleArabic = "هادئ",
         descriptionArabic = "صوت ناعم ومسترخٍ بإيقاع بطيء، مثالي لكتب ما قبل النوم والتأمل والاسترخاء.",
         directorPrompt = "[Style: Whispering, gentle bedtime story, deeply relaxing, slow peaceful pacing]"
     );

@@ -23,7 +23,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="عنوان المقطع (اختياري)"
+            android:text="العنوان (اختياري)"
             android:textColor="@color/text_high_contrast"
             android:textSize="15sp"
             android:textStyle="bold" />
@@ -34,7 +34,7 @@
             android:layout_height="wrap_content"
             android:minHeight="48dp"
             android:layout_marginTop="4dp"
-            android:hint="أدخل عنواناً للمقطع أو اتركه فارغاً"
+            android:hint="عنوان المقطع (اختياري)"
             android:contentDescription="حقل إدخال عنوان المقطع، اختياري"
             android:textColor="@color/text_high_contrast"
             android:textColorHint="@color/text_secondary"
@@ -59,7 +59,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="النص المراد تحويله"
+            android:text="النص"
             android:textColor="@color/text_high_contrast"
             android:textSize="15sp"
             android:textStyle="bold" />

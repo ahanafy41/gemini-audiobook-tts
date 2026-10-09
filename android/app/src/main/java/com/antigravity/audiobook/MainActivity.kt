@@ -254,7 +254,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         // Library Actions
         btnAddBook.setOnClickListener {
             try {
-                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
+                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "text/x-markdown"))
             } catch (e: Exception) {
                 Log.e(TAG, "Error launching file picker: ${e.message}")
                 Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
@@ -477,23 +477,23 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private fun updateStudioUI() {
         val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
         val narratorProfile = getVoiceProfile(narratorId)
-        btnSelectNarratorVoice.text = "صوت الراوي: ${narratorProfile.displayNameArabic}"
-        btnSelectNarratorVoice.contentDescription = "زر اختيار صوت الراوي الأساسي، المختار حالياً هو ${narratorProfile.displayNameArabic}"
+        btnSelectNarratorVoice.text = "الراوي: ${narratorProfile.displayNameArabic}"
+        btnSelectNarratorVoice.contentDescription = "صوت الراوي: ${narratorProfile.displayNameArabic}"
 
         val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
         val stylePreset = VoiceStylePreset.fromId(styleId)
-        btnSelectVoiceStyle.text = "نمط الإلقاء: ${stylePreset.titleArabic}"
-        btnSelectVoiceStyle.contentDescription = "زر اختيار نمط الإلقاء الصوتي، النمط المختار هو ${stylePreset.titleArabic}"
+        btnSelectVoiceStyle.text = "النمط: ${stylePreset.titleArabic}"
+        btnSelectVoiceStyle.contentDescription = "نمط الإلقاء: ${stylePreset.titleArabic}"
 
         val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
-        btnToggleMultiSpeaker.text = if (isMultiSpeaker) "الحوار متعدد الرواة: مفعّل" else "الحوار متعدد الرواة: معطّل"
-        btnToggleMultiSpeaker.contentDescription = "زر تبديل الحوار متعدد الرواة، الحالة الحالية هي ${if (isMultiSpeaker) "مفعل" else "معطل"}"
+        btnToggleMultiSpeaker.text = if (isMultiSpeaker) "الحوار: مفعّل" else "الحوار: معطّل"
+        btnToggleMultiSpeaker.contentDescription = "الحوار المتعدد: ${if (isMultiSpeaker) "مفعل" else "معطل"}"
         btnSelectCharacterVoice.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
 
         val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
         val characterProfile = getVoiceProfile(characterId)
-        btnSelectCharacterVoice.text = "صوت الشخصيات: ${characterProfile.displayNameArabic}"
-        btnSelectCharacterVoice.contentDescription = "زر اختيار صوت الشخصيات والحوار، المختار حالياً هو ${characterProfile.displayNameArabic}"
+        btnSelectCharacterVoice.text = "الشخصيات: ${characterProfile.displayNameArabic}"
+        btnSelectCharacterVoice.contentDescription = "صوت الشخصيات: ${characterProfile.displayNameArabic}"
     }
 
     private fun showNarratorVoicePicker() {
@@ -794,22 +794,22 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
         if (apiKey.isNotBlank() && apiKey.length >= 15) {
             val masked = "${apiKey.take(6)}...${apiKey.takeLast(4)}"
-            textApiKeyStatus.text = "المفتاح مسجل ونشط: $masked"
+            textApiKeyStatus.text = "المفتاح: $masked"
             textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
         } else {
-            textApiKeyStatus.text = "المفتاح غير مسجل، يرجى إدخال مفتاح Gemini API لتفعيل التحويل"
+            textApiKeyStatus.text = "المفتاح غير مسجل"
             textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
 
         val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
-        btnSelectModel.text = "النموذج المعتمد: $modelId"
+        btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.7"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.8"
         } catch (e: Exception) {
-            "1.1.7"
+            "1.1.8"
         }
-        textAppVersion.text = "الإصدار الحالي: $currentVer"
+        textAppVersion.text = "الإصدار: $currentVer"
     }
 
     private fun showApiKeyEditDialog() {
@@ -983,7 +983,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         } else {
             announceStatus("يرجى اختيار ملف النص الأصلي للكتاب لاستئناف معالجته.")
             try {
-                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "*/*"))
+                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "text/x-markdown"))
             } catch (e: Exception) {
                 Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
             }
@@ -1043,7 +1043,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val isMulti = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
         val multiInfo = if (isMulti) " | الحوار متعدد" else ""
 
-        textActiveVoiceSettings.text = "الصوت النشط: ${narratorProfile.displayNameArabic} (${stylePreset.titleArabic})$multiInfo"
+        textActiveVoiceSettings.text = "الراوي: ${narratorProfile.displayNameArabic} | النمط: ${stylePreset.titleArabic}$multiInfo"
 
         val updateCount = {
             val len = editPasteContent.text?.length ?: 0
@@ -1130,6 +1130,12 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             try {
                 announceStatus("جارِ استيراد الكتاب وقراءة الملف...")
                 val rawName = getFileNameFromUri(uri)
+                val ext = rawName?.substringAfterLast('.', "")?.lowercase() ?: ""
+                if (ext.isNotEmpty() && ext != "txt" && ext != "md" && ext != "markdown") {
+                    announceStatus("عذراً، يجب اختيار ملف نصي (.txt) أو مارك داون (.md) فقط")
+                    Toast.makeText(this@MainActivity, "نوع الملف غير مدعوم. اختر ملف .txt أو .md فقط", Toast.LENGTH_LONG).show()
+                    return@launch
+                }
                 val safeName = if (!rawName.isNullOrBlank()) {
                     rawName.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_")
                 } else {
@@ -1381,9 +1387,9 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.7"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.1.8"
                 } catch (e: Exception) {
-                    "1.1.7"
+                    "1.1.8"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {
