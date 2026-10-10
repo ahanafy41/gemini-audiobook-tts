@@ -1160,9 +1160,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.1"
         } catch (e: Exception) {
-            "1.2.0"
+            "1.2.1"
         }
         textAppVersion.text = "الإصدار: $currentVer"
     }
@@ -1790,9 +1790,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.0"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.1"
                 } catch (e: Exception) {
-                    "1.2.0"
+                    "1.2.1"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {

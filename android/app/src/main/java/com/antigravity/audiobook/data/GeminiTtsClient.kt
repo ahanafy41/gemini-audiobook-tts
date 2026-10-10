@@ -443,10 +443,12 @@ class GeminiTtsClient(
                 put("type", "replicated")
                 put("display_name", displayName)
                 put("replicated", JSONObject().apply {
-                    put("reference_audio", JSONObject().apply {
+                    put("source_audio", JSONObject().apply {
+                        put("mime_type", "audio/wav")
                         put("data", refB64)
                     })
                     put("consent_audio", JSONObject().apply {
+                        put("mime_type", "audio/wav")
                         put("data", consentB64)
                     })
                 })
@@ -457,7 +459,7 @@ class GeminiTtsClient(
             .url(url)
             .post(requestBody)
             .header("x-goog-api-key", apiKey)
-            .header("User-Agent", "GeminiAudiobookAndroid/1.1.9")
+            .header("User-Agent", "GeminiAudiobookAndroid/1.2.1")
             .build()
 
         try {
@@ -465,12 +467,18 @@ class GeminiTtsClient(
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
                     Log.e(TAG, "Voice replication failed (${response.code}): $body")
+                    val errorDetail = try {
+                        val errObj = JSONObject(body).optJSONObject("error")
+                        errObj?.optString("message") ?: body
+                    } catch (e: Exception) {
+                        body
+                    }
                     val msg = when {
                         body.contains("consent", ignoreCase = true) || body.contains("match", ignoreCase = true) ->
-                            "فشل التحقق من الموافقة: يرجى التأكد من أن تسجيل الموافقة لنفس المتحدث وقراءة العبارة بدقة."
+                            "فشل التحقق من الموافقة: يرجى التأكد من أن تسجيل الموافقة لنفس المتحدث وقراءة العبارة الإنجليزية بدقة."
                         body.contains("duration", ignoreCase = true) || body.contains("short", ignoreCase = true) ->
                             "عينة الصوت قصيرة جداً، يرجى تسجيل عينة لا تقل عن 10 ثوانٍ."
-                        else -> "فشل استنساخ الصوت (${response.code}): $body"
+                        else -> "فشل استنساخ الصوت (${response.code}): $errorDetail"
                     }
                     throw IllegalStateException(msg)
                 }
