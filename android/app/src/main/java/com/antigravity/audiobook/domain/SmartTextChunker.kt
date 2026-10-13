@@ -12,8 +12,8 @@ class SmartTextChunker(
 ) {
 
     companion object {
-        const val DEFAULT_MAX_CHUNK_SIZE = 12000
-        const val STRICT_LIMIT = 30000
+        const val DEFAULT_MAX_CHUNK_SIZE = 8000
+        const val STRICT_LIMIT = 8500
         private const val TAG = "SmartTextChunker"
         private val SENTENCE_ENDINGS = Regex("([.!?؟؛\\n]+)")
         private val PARAGRAPH_SPLIT = Regex("\\r?\\n\\s*\\r?\\n")

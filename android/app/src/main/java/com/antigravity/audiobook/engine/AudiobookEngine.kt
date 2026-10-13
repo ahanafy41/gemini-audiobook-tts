@@ -41,7 +41,7 @@ class AudiobookEngine(
     }
 
     private val bookParser = BookParser()
-    private val chunker = SmartTextChunker(12000)
+    private val chunker = SmartTextChunker(8000)
     private val progressFile = File(outputDir, "progress.json")
     private val manifestFile = File(outputDir, "book_manifest.json")
 

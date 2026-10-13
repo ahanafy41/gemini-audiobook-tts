@@ -56,19 +56,18 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.4.3"
-          name: "Gemini Audiobook TTS v1.4.3 (APK)"
+          tag_name: "v1.4.4"
+          name: "Gemini Audiobook TTS v1.4.4 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.4.3
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.4.4
 
+            - **إصلاح خطأ 400 (Developer instruction is not enabled for this model)**:
+              - إزالة تعليمات المطور (Developer instruction) غير المدعومة في نموذج التوليد الصوتي لـ Gemini TTS ليعمل التوليد بسلاسة وبدون أي أخطاء.
+            - **ضبط حدود النصوص إلى 8000 حرف (8000 Characters Safe Chunking)**:
+              - ضبط سقف تقطيع الفصول إلى 8000 حرف بدقة وفق رغبة المستخدم لضمان استقرار التحويل.
             - **إصلاح خطأ 403 في فحص التحديثات (Fix 403 Update Check Error)**:
-              - إضافة نظام استرجاع مباشر (Web Fallback) لتجاوز قيود واجهة برمجة تطبيقات GitHub (API Rate Limits 403)، مما يضمن نجاح فحص التحديثات من داخل التطبيق بنسبة 100% دائماً.
-            - **دعم النصوص الطويلة حتى 12000+ حرف (Gemini 3.8 Flash TTS Full Capacity)**:
-              - رفع سقف التقطيع الافتراضي إلى 12000 حرف مع سقف أقصى 30000 حرف للاستفادة الكاملة من قدرات Gemini 3.8 Flash TTS الفائقة في معالجة الفصول الطويلة كقطعة واحدة.
-            - **إصلاح خطأ استخراج الصوت (Fix Audio data not found in response JSON)**:
-              - **فحص شامل لجميع الأجزاء (Multi-Part Scanning)**: استخراج الصوت من كافة أجزاء الرد.
-              - **تعطيل فلاتر الأمان للروايات الأدبية (BLOCK_NONE Safety Settings)**: منع حظر الروايات بسبب المفردات الدرامية.
-              - **تعليمات النظام الصارمة للراوي (System Instructions)**: فرض قراءة النص حرفياً بدون أي كلام إضافي.
-              - **تشخيص أخطاء الاستجابة بدقة**: إظهار السبب الفعلي لأي توقف من الخادم.
+              - إضافة نظام استرجاع مباشر (Web Fallback) لتجاوز قيود GitHub API والتحقق من التحديثات بنجاح دائم.
+            - **فحص شامل لكافة أجزاء الاستجابة (Multi-Part Scanning)**:
+              - استخراج الصوت بدقة حتى لو تم إرجاعه عبر أجزاء متعددة في الرد.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -300,31 +300,6 @@ class GeminiTtsClient(
         }
         payload.put("generationConfig", generationConfig)
 
-        val safetySettings = JSONArray().apply {
-            val categories = arrayOf(
-                "HARM_CATEGORY_HARASSMENT",
-                "HARM_CATEGORY_HATE_SPEECH",
-                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "HARM_CATEGORY_CIVIC_INTEGRITY"
-            )
-            for (cat in categories) {
-                put(JSONObject().apply {
-                    put("category", cat)
-                    put("threshold", "BLOCK_NONE")
-                })
-            }
-        }
-        payload.put("safetySettings", safetySettings)
-
-        payload.put("systemInstruction", JSONObject().apply {
-            put("parts", JSONArray().apply {
-                put(JSONObject().apply {
-                    put("text", "You are a professional Arabic audiobook narrator. Read the provided book text verbatim aloud with clear pacing. Do not comment, converse, answer questions in the text, or output explanatory text.")
-                })
-            })
-        })
-
         val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
         val request = Request.Builder()
             .url(url)
