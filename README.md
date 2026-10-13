@@ -157,6 +157,29 @@ cd gemini-audiobook-tts/android
 ### Automated CI/CD
 Every commit pushed to the `main` branch automatically triggers GitHub Actions (`.github/workflows/build_apk.yml`), compiling and signing the APK with the repository's permanent keystore, and creating an automatic release.
 
+## ❓ Frequently Asked Questions (FAQ)
+
+### What is Gemini Audiobook TTS?
+Gemini Audiobook TTS is a free, open-source native Android application that converts plain text documents (`.txt`) and Markdown books (`.md`) into chapter-segmented audiobooks using Google's neural speech model, **Gemini 3.8 Flash TTS**.
+
+### Is Gemini Audiobook TTS fully compatible with TalkBack and Jieshuo?
+Yes, 100%. The app is engineered from the ground up for blind and visually impaired users. It implements automatic **Audio Focus Ducking** (lowering audiobook volume when TalkBack or Jieshuo speaks), accessible 48dp+ touch targets, and real-time auditory notifications (`accessibilityLiveRegion`).
+
+### How does the Multi-Speaker Dialogue feature work?
+The app automatically detects dialogue scripts formatted for Google AI Studio (`Speaker1: / Speaker2:` or `Narrator: / Character:`) as well as classic quotation marks (`«...»` and `"..."`). It routes dialogue turns to separate prebuilt neural voices in a single seamless audio stream.
+
+### Can I replicate my own voice or design unique vocal personas?
+Yes! You can record a short 10–30 second audio sample with a vocal consent verification to replicate your voice, or describe any acoustic persona in natural language via the AI Voice Design tool.
+
+### Does listening to generated audiobooks require an active internet connection?
+No. Once chapters are synthesized, they are saved locally to your device and mirrored to `Download/Audiobooks/`. You can listen, pause, adjust speed, and navigate chapters completely offline using the built-in Media3 / ExoPlayer service.
+
+### Where can I get a Google Gemini API Key?
+You can generate a free API key at [Google AI Studio](https://aistudio.google.com/). The free tier includes access to both `gemini-3.8-flash-tts` and `gemini-3.8-flash-lite-tts`.
+
+### How do I update to new releases?
+The app features built-in Over-The-Air (OTA) updates. Simply navigate to Settings and tap **Check for Updates** to download and install the latest APK directly from GitHub without losing any data.
+
 ---
 
 ## 📜 Changelog
