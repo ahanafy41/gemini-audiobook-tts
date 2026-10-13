@@ -297,6 +297,7 @@ class GeminiTtsClient(
             generationConfig.put("speechConfig", JSONObject().apply {
                 put("voiceConfig", voiceConfigObj)
             })
+        }
         payload.put("generationConfig", generationConfig)
 
         val safetySettings = JSONArray().apply {
