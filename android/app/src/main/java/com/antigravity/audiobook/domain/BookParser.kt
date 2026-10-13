@@ -104,7 +104,7 @@ class BookParser(
                         CleanedChapter(
                             chapterTitle = "مقدمة",
                             level = 1,
-                            text = "مقدمة. <short pause>\n\n$cleanPref",
+                            text = cleanPref,
                             rawLength = preface.length
                         )
                     )
@@ -117,7 +117,7 @@ class BookParser(
                 val body = trimmed.substring(current.end, nextStart).trim()
                 val cleanBody = markdownStripper.cleanMarkdownText(body)
                 val spoken = if (cleanBody.isNotEmpty()) {
-                    "${current.title}. <short pause>\n\n$cleanBody"
+                    cleanBody
                 } else {
                     current.title
                 }
@@ -177,7 +177,7 @@ class BookParser(
             "${group.first().chapterTitle} إلى ${group.last().chapterTitle}"
         }
 
-        val combinedText = group.joinToString("\n\n<short pause>\n\n") { it.text }
+        val combinedText = group.joinToString("\n\n\n\n") { it.text }
         val totalRawLength = group.sumOf { it.rawLength }
 
         return CleanedChapter(
@@ -214,7 +214,7 @@ class BookParser(
                     CleanedChapter(
                         chapterTitle = title,
                         level = 1,
-                        text = "$title. <short pause>\n\n$cleanBody",
+                        text = cleanBody,
                         rawLength = currentLength
                     )
                 )
@@ -233,7 +233,7 @@ class BookParser(
                 CleanedChapter(
                     chapterTitle = title,
                     level = 1,
-                    text = "$title. <short pause>\n\n$cleanBody",
+                    text = cleanBody,
                     rawLength = currentLength
                 )
             )

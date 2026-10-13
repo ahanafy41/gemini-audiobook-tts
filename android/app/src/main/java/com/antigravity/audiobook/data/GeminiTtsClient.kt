@@ -92,6 +92,82 @@ class GeminiTtsClient(
 
             return createWavHeader(pcmBuffer.array(), sampleRate = sampleRate)
         }
+
+        data class ParsedWavResult(
+            val pcm: ByteArray,
+            val sampleRate: Int = 24000,
+            val channels: Short = 1,
+            val bitsPerSample: Short = 16
+        ) {
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (javaClass != other?.javaClass) return false
+                other as ParsedWavResult
+                return pcm.contentEquals(other.pcm) && sampleRate == other.sampleRate &&
+                        channels == other.channels && bitsPerSample == other.bitsPerSample
+            }
+
+            override fun hashCode(): Int {
+                var result = pcm.contentHashCode()
+                result = 31 * result + sampleRate
+                result = 31 * result + channels
+                result = 31 * result + bitsPerSample
+                return result
+            }
+        }
+
+        fun extractPcmData(bytes: ByteArray): ParsedWavResult? {
+            if (bytes.size < 12) return null
+            if (bytes[0] != 'R'.code.toByte() || bytes[1] != 'I'.code.toByte() ||
+                bytes[2] != 'F'.code.toByte() || bytes[3] != 'F'.code.toByte()) {
+                return null
+            }
+            if (bytes[8] != 'W'.code.toByte() || bytes[9] != 'A'.code.toByte() ||
+                bytes[10] != 'V'.code.toByte() || bytes[11] != 'E'.code.toByte()) {
+                return null
+            }
+
+            var sampleRate = 24000
+            var channels: Short = 1
+            var bitsPerSample: Short = 16
+            var pcmBytes: ByteArray? = null
+
+            var offset = 12
+            val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+
+            while (offset + 8 <= bytes.size) {
+                val chunkId = String(bytes, offset, 4, Charsets.US_ASCII)
+                val chunkSize = buffer.getInt(offset + 4).toLong() and 0xFFFFFFFFL
+                val dataOffset = offset + 8
+
+                if (chunkId == "fmt ") {
+                    if (dataOffset + 14 <= bytes.size) {
+                        channels = buffer.getShort(dataOffset + 2)
+                        sampleRate = buffer.getInt(dataOffset + 4)
+                        if (dataOffset + 16 <= bytes.size) {
+                            bitsPerSample = buffer.getShort(dataOffset + 14)
+                        }
+                    }
+                } else if (chunkId == "data") {
+                    val actualLength = if (dataOffset + chunkSize <= bytes.size) {
+                        chunkSize.toInt()
+                    } else {
+                        (bytes.size - dataOffset).coerceAtLeast(0)
+                    }
+                    pcmBytes = bytes.copyOfRange(dataOffset, dataOffset + actualLength)
+                    break
+                }
+
+                val paddedSize = chunkSize + (chunkSize % 2)
+                val nextOffset = dataOffset + paddedSize
+                if (nextOffset <= offset || nextOffset > Int.MAX_VALUE) break
+                offset = nextOffset.toInt()
+            }
+
+            return if (pcmBytes != null) {
+                ParsedWavResult(pcmBytes, sampleRate, channels, bitsPerSample)
+            } else null
+        }
     }
 
     private class ResilientDns : Dns {
@@ -151,9 +227,14 @@ class GeminiTtsClient(
             })
         }
 
-        val instructionTag = if (!customInstructions.isNullOrBlank()) {
-            "[Voice Instructions: ${customInstructions.trim()}]"
-        } else null
+        val styleDescription = buildList {
+            if (stylePreset != VoiceStylePreset.NATURAL) {
+                add(stylePreset.directorPrompt.removePrefix("[Style: ").removeSuffix("]"))
+            }
+            if (!customInstructions.isNullOrBlank()) {
+                add(customInstructions.trim())
+            }
+        }.joinToString(", ")
 
         if (multiSpeakerConfig != null && multiSpeakerConfig.isEnabled) {
             val annotator = DialogueTurnAnnotator("Narrator", "Character")
@@ -161,24 +242,16 @@ class GeminiTtsClient(
             val partsArray = JSONArray()
             for (index in turns.indices) {
                 val turn = turns[index]
-                val turnText = if (index == 0) {
-                    when {
-                        instructionTag != null && stylePreset != VoiceStylePreset.NATURAL ->
-                            "${stylePreset.directorPrompt}\n$instructionTag\n${turn.text}"
-                        instructionTag != null ->
-                            "$instructionTag\n${turn.text}"
-                        stylePreset != VoiceStylePreset.NATURAL ->
-                            "${stylePreset.directorPrompt}\n${turn.text}"
-                        else -> turn.text
+                val turnText = turn.text
+                val speechMeta = JSONObject().apply {
+                    put("speaker", turn.speaker)
+                    if (index == 0 && styleDescription.isNotEmpty()) {
+                        put("style", styleDescription)
                     }
-                } else {
-                    turn.text
                 }
                 partsArray.put(JSONObject().apply {
                     put("text", turnText)
-                    put("speechMetadata", JSONObject().apply {
-                        put("speaker", turn.speaker)
-                    })
+                    put("speechMetadata", speechMeta)
                 })
             }
             payload.put("contents", JSONArray().apply {
@@ -188,18 +261,14 @@ class GeminiTtsClient(
             })
             generationConfig.put("speechConfig", multiSpeakerConfig.toSpeechConfigJson())
         } else {
-            val promptText = when {
-                instructionTag != null && stylePreset != VoiceStylePreset.NATURAL ->
-                    "${stylePreset.directorPrompt}\n$instructionTag\n$cleanText"
-                instructionTag != null ->
-                    "$instructionTag\n$cleanText"
-                stylePreset != VoiceStylePreset.NATURAL ->
-                    "${stylePreset.directorPrompt}\n$cleanText"
-                else -> cleanText
-            }
             val partsArray = JSONArray().apply {
                 put(JSONObject().apply {
-                    put("text", promptText)
+                    put("text", cleanText)
+                    if (styleDescription.isNotEmpty()) {
+                        put("speechMetadata", JSONObject().apply {
+                            put("style", styleDescription)
+                        })
+                    }
                 })
             }
             payload.put("contents", JSONArray().apply {
@@ -267,16 +336,24 @@ class GeminiTtsClient(
                     } else {
                         val responseStr = response.body?.string() ?: ""
                         val json = JSONObject(responseStr)
-                        val audioBytes = extractAudioBytes(json)
-                        audioResult = if (audioBytes.size >= 4 &&
-                            audioBytes[0] == 'R'.code.toByte() &&
-                            audioBytes[1] == 'I'.code.toByte() &&
-                            audioBytes[2] == 'F'.code.toByte() &&
-                            audioBytes[3] == 'F'.code.toByte()
+                        val rawAudio = extractAudioBytes(json)
+                        val parsed = extractPcmData(rawAudio)
+                        audioResult = if (parsed != null) {
+                            createWavHeader(
+                                parsed.pcm,
+                                sampleRate = parsed.sampleRate,
+                                channels = parsed.channels,
+                                bitsPerSample = parsed.bitsPerSample
+                            )
+                        } else if (rawAudio.size >= 4 &&
+                            rawAudio[0] == 'R'.code.toByte() &&
+                            rawAudio[1] == 'I'.code.toByte() &&
+                            rawAudio[2] == 'F'.code.toByte() &&
+                            rawAudio[3] == 'F'.code.toByte()
                         ) {
-                            audioBytes
+                            rawAudio
                         } else {
-                            createWavHeader(audioBytes, sampleRate = 24000)
+                            createWavHeader(rawAudio, sampleRate = 24000)
                         }
                     }
                 }

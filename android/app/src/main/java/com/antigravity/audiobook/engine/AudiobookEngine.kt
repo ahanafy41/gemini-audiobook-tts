@@ -235,9 +235,16 @@ class AudiobookEngine(
         val pcmStreams = mutableListOf<ByteArray>()
 
         for (f in files) {
-            if (!f.exists() || f.length() < 44) continue
+            if (!f.exists() || f.length() < 12) continue
             val bytes = f.readBytes()
-            if (bytes.size >= 44 && String(bytes.copyOfRange(0, 4)) == "RIFF") {
+            val parsed = GeminiTtsClient.extractPcmData(bytes)
+            if (parsed != null) {
+                channels = parsed.channels
+                sampleRate = parsed.sampleRate
+                bitsPerSample = parsed.bitsPerSample
+                val smoothedPcm = applyGentleFadeOut(parsed.pcm, sampleRate, channels, bitsPerSample, 50)
+                pcmStreams.add(smoothedPcm)
+            } else if (bytes.size >= 44 && String(bytes.copyOfRange(0, 4)) == "RIFF") {
                 val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
                 channels = buffer.getShort(22)
                 sampleRate = buffer.getInt(24)
@@ -268,5 +275,35 @@ class AudiobookEngine(
 
         val bytesPerSec = sampleRate * channels * (bitsPerSample / 8)
         return if (bytesPerSec > 0) (totalPcmSize.toLong() * 1000) / bytesPerSec else 0L
+    }
+
+    private fun applyGentleFadeOut(
+        pcm: ByteArray,
+        sampleRate: Int,
+        channels: Short,
+        bitsPerSample: Short,
+        fadeMs: Int = 50
+    ): ByteArray {
+        if (bitsPerSample != 16.toShort() || pcm.size < 4) return pcm
+        val bytesPerSample = (channels * 2).toInt()
+        val totalSamples = pcm.size / bytesPerSample
+        val fadeSamples = ((sampleRate * fadeMs) / 1000).coerceAtMost(totalSamples)
+        if (fadeSamples <= 0) return pcm
+
+        val output = pcm.copyOf()
+        val startSample = totalSamples - fadeSamples
+        val buffer = ByteBuffer.wrap(output).order(ByteOrder.LITTLE_ENDIAN)
+
+        for (i in 0 until fadeSamples) {
+            val sampleIndex = startSample + i
+            val gain = 1.0 - (i.toDouble() / fadeSamples.toDouble())
+            for (ch in 0 until channels) {
+                val bytePos = sampleIndex * bytesPerSample + ch * 2
+                val originalVal = buffer.getShort(bytePos)
+                val fadedVal = (originalVal * gain).toInt().coerceIn(-32768, 32767).toShort()
+                buffer.putShort(bytePos, fadedVal)
+            }
+        }
+        return output
     }
 }

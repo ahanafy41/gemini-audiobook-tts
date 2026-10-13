@@ -56,10 +56,20 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.3.1"
-          name: "Gemini Audiobook TTS v1.3.1 (APK)"
+          tag_name: "v1.3.2"
+          name: "Gemini Audiobook TTS v1.3.2 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.3.1
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.3.2
+
+            - **إزالة التشويش والوشّة الصوتية في نهايات الفصول (WAV Metadata Demuxing & Clean PCM)**:
+              - تطبيق خوارزمية فحص الـ RIFF واستخراج كتلة الصوت الحقيقية (`data` subchunk) فقط بدقة بالغة.
+              - استبعاد كتل البيانات الوصفية (C2PA / SynthID / LIST metadata) التي كانت تُعامل كعينات صوت وتسبب الوشّة العالية.
+              - تطبيق تلاشٍ تدريجي ناعم (50ms Fade-out) لمنع أي طقطقة رقمية (DC offset click) بين المقاطع وفي نهاية الصوت.
+
+            - **تنقية بدايات الفصول من العناوين والوسوم غير المرغوبة (Clean Narrative Audio)**:
+              - إزالة حقن العناوين التلقائية وبادئة `<short pause>` من النص المرسل إلى Gemini TTS.
+              - منع نطق "الكتاب كاملاً." أو عناوين الأجزاء قبل بداية الرواية، لتبدأ القراءة مباشرة من النص الحقيقي.
+              - تمرير تعليمات الصوت ونمط الأداء عبر `speechMetadata` بدلاً من دمجها في النص المسموع لمنع قراءة وسوم التوجيه.
 
             - **الوصول المباشر الكامل لجذر الذاكرة الداخلية (Full Storage Access / Direct Root Folder)**:
               - إضافة إذن `MANAGE_EXTERNAL_STORAGE` لحفظ وتصدير الكتب الصوتية وفصولها مباشرة في جذر الذاكرة الداخلية في المجلد المعتمد: `/sdcard/GeminiAudiobook/<اسم_الكتاب>/` بدلاً من دفنها في المجلدات الفرعية.
