@@ -56,10 +56,19 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.3.0"
-          name: "Gemini Audiobook TTS v1.3.0 (APK)"
+          tag_name: "v1.3.1"
+          name: "Gemini Audiobook TTS v1.3.1 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.3.0
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.3.1
+
+            - **الوصول المباشر الكامل لجذر الذاكرة الداخلية (Full Storage Access / Direct Root Folder)**:
+              - إضافة إذن `MANAGE_EXTERNAL_STORAGE` لحفظ وتصدير الكتب الصوتية وفصولها مباشرة في جذر الذاكرة الداخلية في المجلد المعتمد: `/sdcard/GeminiAudiobook/<اسم_الكتاب>/` بدلاً من دفنها في المجلدات الفرعية.
+            - **إشعار فوري للنظام (MediaScanner Integration)**:
+              - فحص وتحديث فهرس وسائط أندرويد تلقائياً عبر `MediaScannerConnection` فور حفظ أي ملف صوتي ليظهر فوراً في قارئات الشاشة (TalkBack / Jieshuo) وتطبيقات الصوتيات.
+            - **بطاقة فحص وتفعيل إذن الملفات في الإعدادات (Storage Permission Card)**:
+              - إضافة خيار وبطاقة تفاعلية في تبويب الإعدادات توضح مسار الحفظ المعتمد وتتيح فحص ومنح إذن الوصول لجميع الملفات بضغطة زر واحدة.
+            - **توحيد الملف الكامل لجميع الكتب (Full Unified Audio for All Books)**:
+              - ضمان إنشاء وتصدير الملف الصوتي الموحد الكامل (`_كامل.wav`) لجميع الكتب سواء كانت فصلاً واحداً أو عدة فصول.
 
             - **فاصل زمني وقائي (60-Second Delay)**:
               - إضافة فاصل دقيقة كاملة (60 ثانية) بين تحويل فصول الكتاب لتجنب استنزاف حد الحصة (Quota / 429) لحسابات Gemini المجانية.

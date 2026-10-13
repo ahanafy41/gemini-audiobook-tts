@@ -180,22 +180,27 @@ class AudiobookEngine(
             saveManifest(currentManifest)
         }
 
-        // Task 3: Auto-merge all chapters into a single full audiobook file when multi-chapter synthesis finishes
-        if (parsedBook.chapters.size > 1) {
+        // Auto-merge or create full unified audiobook file when synthesis finishes
+        if (parsedBook.chapters.isNotEmpty()) {
             try {
                 val allChapterFiles = (1..parsedBook.chapters.size).mapNotNull { idx ->
-                    val f = File(chaptersDir, String.format("chapter_%03d.wav", idx))
+                    val f = File(chaptersDir, String.format(java.util.Locale.US, "chapter_%03d.wav", idx))
                     if (f.exists() && f.length() > 1000) f else null
                 }
                 if (allChapterFiles.size == parsedBook.chapters.size) {
                     val fullBookWav = File(outputDir, "full_book.wav")
-                    val fullDurationMs = concatenateWavs(allChapterFiles, fullBookWav)
-                    val fullDurationSec = fullDurationMs / 1000
-                    Log.i(TAG, "Successfully auto-merged ${allChapterFiles.size} chapters into full_book.wav ($fullDurationSec s)")
+                    if (allChapterFiles.size > 1) {
+                        val fullDurationMs = concatenateWavs(allChapterFiles, fullBookWav)
+                        val fullDurationSec = fullDurationMs / 1000
+                        Log.i(TAG, "Successfully auto-merged ${allChapterFiles.size} chapters into full_book.wav ($fullDurationSec s)")
+                    } else if (allChapterFiles.size == 1) {
+                        allChapterFiles[0].copyTo(fullBookWav, overwrite = true)
+                        Log.i(TAG, "Single chapter book prepared as full_book.wav")
+                    }
                     AudioExporter.exportFullBookAudio(context, fullBookWav, parsedBook.title)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error auto-merging full audiobook: ${e.message}", e)
+                Log.e(TAG, "Error generating full audiobook: ${e.message}", e)
             }
         }
 

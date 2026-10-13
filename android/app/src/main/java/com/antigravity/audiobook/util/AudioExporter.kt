@@ -17,12 +17,23 @@ import java.io.File
  * Utility for exporting and sharing converted audiobook WAV files
  * to public storage (/sdcard/Download/Audiobooks/) and system share sheet.
  */
+import android.media.MediaScannerConnection
+import java.util.Locale
+
 object AudioExporter {
 
     private const val TAG = "AudioExporter"
     private const val AUTHORITY = "com.antigravity.audiobook.fileprovider"
 
     const val DEDICATED_DIR = "GeminiAudiobook"
+
+    fun hasDirectStorageAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+    }
 
     fun exportChapterToDedicatedFolder(
         context: Context,
@@ -35,10 +46,17 @@ object AudioExporter {
 
         val safeBook = bookTitle.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_").trim().ifBlank { "audiobook" }
         val safeChapter = chapterTitle.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_").trim().ifBlank { "chapter_$chapterIndex" }
-        val fileName = "${safeBook}_فصل_${String.format("%03d", chapterIndex)}_${safeChapter}.wav"
+        val fileName = "${safeBook}_فصل_${String.format(Locale.US, "%03d", chapterIndex)}_${safeChapter}.wav"
 
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (hasDirectStorageAccess()) {
+                val pubDir = File(Environment.getExternalStorageDirectory(), "$DEDICATED_DIR/$safeBook").apply { mkdirs() }
+                val target = File(pubDir, fileName)
+                chapterWav.copyTo(target, overwrite = true)
+                Log.i(TAG, "Directly saved chapter $chapterIndex to: ${target.absolutePath}")
+                MediaScannerConnection.scanFile(context, arrayOf(target.absolutePath), arrayOf("audio/wav"), null)
+                Uri.fromFile(target)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val resolver = context.contentResolver
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -64,6 +82,7 @@ object AudioExporter {
                 val target = File(pubDir, fileName)
                 chapterWav.copyTo(target, overwrite = true)
                 Log.i(TAG, "Exported chapter $chapterIndex to public file: ${target.absolutePath}")
+                MediaScannerConnection.scanFile(context, arrayOf(target.absolutePath), arrayOf("audio/wav"), null)
                 Uri.fromFile(target)
             }
         } catch (e: Exception) {
@@ -91,7 +110,14 @@ object AudioExporter {
         val fileName = "${safeBook}_كامل.wav"
 
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (hasDirectStorageAccess()) {
+                val pubDir = File(Environment.getExternalStorageDirectory(), "$DEDICATED_DIR/$safeBook").apply { mkdirs() }
+                val target = File(pubDir, fileName)
+                fullWav.copyTo(target, overwrite = true)
+                Log.i(TAG, "Directly saved full audiobook to: ${target.absolutePath}")
+                MediaScannerConnection.scanFile(context, arrayOf(target.absolutePath), arrayOf("audio/wav"), null)
+                Uri.fromFile(target)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val resolver = context.contentResolver
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -109,7 +135,7 @@ object AudioExporter {
                     values.clear()
                     values.put(MediaStore.MediaColumns.IS_PENDING, 0)
                     resolver.update(uri, values, null, null)
-                    Log.i(TAG, "Exported full merged audiobook to GeminiAudiobook: $fileName")
+                    Log.i(TAG, "Exported full merged audiobook to GeminiAudiobook MediaStore: $fileName")
                     uri
                 } else null
             } else {
@@ -117,6 +143,7 @@ object AudioExporter {
                 val target = File(pubDir, fileName)
                 fullWav.copyTo(target, overwrite = true)
                 Log.i(TAG, "Exported full merged audiobook to public file: ${target.absolutePath}")
+                MediaScannerConnection.scanFile(context, arrayOf(target.absolutePath), arrayOf("audio/wav"), null)
                 Uri.fromFile(target)
             }
         } catch (e: Exception) {
@@ -146,7 +173,7 @@ object AudioExporter {
             val resolved = listOf(
                 File(audioPath),
                 File(book.bookDir, audioFile),
-                File(book.bookDir, "chapters/chapter_%03d.wav".format(chIdx))
+                File(book.bookDir, "chapters/chapter_${String.format(Locale.US, "%03d", chIdx)}.wav")
             ).firstOrNull { it.exists() && it.length() > 0 } ?: continue
 
             val uri = exportChapterToDedicatedFolder(context, resolved, book.title, chIdx, title)
@@ -155,7 +182,12 @@ object AudioExporter {
             }
         }
 
-        return Pair(exportedCount, destPathDisplay)
+        val fullDisplayPath = if (hasDirectStorageAccess()) {
+            "/sdcard/$DEDICATED_DIR/$safeBook"
+        } else {
+            "Music/$DEDICATED_DIR/$safeBook"
+        }
+        return Pair(exportedCount, fullDisplayPath)
     }
 
     fun exportBookToDownloads(context: Context, book: BookItem): Pair<Int, String> =

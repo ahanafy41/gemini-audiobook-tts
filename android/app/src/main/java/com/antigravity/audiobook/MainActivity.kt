@@ -131,6 +131,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnEditApiKey: Button
     private lateinit var btnTestApiKey: Button
     private lateinit var btnSelectModel: Button
+    private lateinit var textStorageFolderInfo: TextView
+    private lateinit var btnStoragePermission: Button
     private lateinit var textAppVersion: TextView
     private lateinit var btnCheckAppUpdate: Button
 
@@ -246,6 +248,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnEditApiKey = findViewById(R.id.btnEditApiKey)
         btnTestApiKey = findViewById(R.id.btnTestApiKey)
         btnSelectModel = findViewById(R.id.btnSelectModel)
+        textStorageFolderInfo = findViewById(R.id.textStorageFolderInfo)
+        btnStoragePermission = findViewById(R.id.btnStoragePermission)
         textAppVersion = findViewById(R.id.textAppVersion)
         btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
 
@@ -414,6 +418,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         btnSelectModel.setOnClickListener {
             showModelSelectionDialog()
+        }
+
+        btnStoragePermission.setOnClickListener {
+            requestOrCheckStoragePermission()
         }
 
         btnCheckAppUpdate.setOnClickListener {
@@ -1214,11 +1222,67 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3.0"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3.1"
         } catch (e: Exception) {
-            "1.3.0"
+            "1.3.1"
         }
         textAppVersion.text = "الإصدار: $currentVer"
+
+        val hasStorage = hasStoragePermission()
+        if (hasStorage) {
+            btnStoragePermission.text = "الوصول للملفات: مفعّل (الذاكرة الداخلية)"
+            btnStoragePermission.contentDescription = "إذن الوصول لجميع الملفات مفعّل، يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية"
+        } else {
+            btnStoragePermission.text = "الوصول للملفات: غير مفعّل (اضغط للتفعيل)"
+            btnStoragePermission.contentDescription = "إذن الوصول لجميع الملفات غير مفعّل، اضغط للانتقال للإعدادات والتفعيل للحفظ في الذاكرة الداخلية"
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateSettingsUI()
+    }
+
+    private fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestOrCheckStoragePermission() {
+        if (hasStoragePermission()) {
+            announceStatus("إذن الوصول لجميع الملفات مفعّل بالفعل. يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية.")
+            Toast.makeText(this, "الإذن مفعّل بالفعل", Toast.LENGTH_SHORT).show()
+        } else {
+            showStoragePermissionDialog()
+        }
+    }
+
+    private fun showStoragePermissionDialog(onDismiss: () -> Unit = {}) {
+        AlertDialog.Builder(this)
+            .setTitle("إذن الوصول الكامل للملفات")
+            .setMessage("ليتمكن التطبيق من حفظ فصول وكتب الصوت مباشرة داخل مجلد «GeminiAudiobook» بالذاكرة الداخلية لجهازك، يرجى تفعيل خيار «الوصول إلى جميع الملفات» في شاشة الإعدادات التالية.")
+            .setPositiveButton("الانتقال للإعدادات والتفعيل") { _, _ ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        startActivity(intent)
+                    }
+                } else {
+                    requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 101)
+                }
+            }
+            .setNegativeButton("لاحقاً") { _, _ ->
+                onDismiss()
+            }
+            .show()
     }
 
     private fun showApiKeyEditDialog() {
@@ -1680,8 +1744,13 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                     }
                 }
 
-                announceStatus("اكتمل تجهيز الكتاب الصوتي بنجاح! اضغط عليه للاستماع.")
-                Toast.makeText(this@MainActivity, "تم تجهيز الكتاب بنجاح", Toast.LENGTH_SHORT).show()
+                val folderDisplay = if (hasStoragePermission()) {
+                    "/sdcard/GeminiAudiobook/$bookTitle"
+                } else {
+                    "Music/GeminiAudiobook/$bookTitle"
+                }
+                announceStatus("اكتمل تجهيز الكتاب الصوتي بنجاح! تم الحفظ في مجلد: $folderDisplay")
+                Toast.makeText(this@MainActivity, "تم حفظ الكتاب في: $folderDisplay", Toast.LENGTH_LONG).show()
                 refreshBooksList()
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing book: ${e.message}", e)
