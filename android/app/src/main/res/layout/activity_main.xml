@@ -81,6 +81,61 @@
 
             </LinearLayout>
 
+            <!-- Resume Incomplete Book Card -->
+            <LinearLayout
+                android:id="@+id/cardResumeIncompleteBook"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@color/surface_dark"
+                android:padding="12dp"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                app:layout_constraintTop_toBottomOf="@id/libraryHeaderLayout"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+                <TextView
+                    android:id="@+id/textResumeBookInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/primary_accessible"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:text="يوجد كتاب غير مكتمل" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp"
+                    android:gravity="end">
+
+                    <Button
+                        android:id="@+id/btnDismissResumeBook"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:minWidth="48dp"
+                        android:layout_marginEnd="8dp"
+                        android:text="تجاهل"
+                        android:contentDescription="تجاهل تنبيه استئناف الكتاب"
+                        android:textColor="@color/text_high_contrast"
+                        android:backgroundTint="@color/divider_color" />
+
+                    <Button
+                        android:id="@+id/btnResumeBook"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:minWidth="48dp"
+                        android:text="استئناف التحويل"
+                        android:contentDescription="استئناف تحويل الكتاب غير المكتمل الآن"
+                        android:textColor="@color/on_primary"
+                        android:backgroundTint="@color/primary_accessible" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- Books List -->
             <ListView
                 android:id="@+id/listViewBooks"
@@ -90,7 +145,7 @@
                 android:layout_marginBottom="8dp"
                 android:divider="@color/divider_color"
                 android:dividerHeight="1dp"
-                app:layout_constraintTop_toBottomOf="@id/libraryHeaderLayout"
+                app:layout_constraintTop_toBottomOf="@id/cardResumeIncompleteBook"
                 app:layout_constraintBottom_toTopOf="@id/miniPlayerLayout" />
 
             <!-- Empty State Text -->

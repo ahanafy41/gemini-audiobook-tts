@@ -66,11 +66,30 @@ class AudiobookEngine(
         temp.renameTo(progressFile)
     }
 
+    private fun saveBookSettings() {
+        try {
+            val settings = JSONObject().apply {
+                put("voice_name", voiceName)
+                put("style_preset", stylePreset.id)
+                if (!customInstructions.isNullOrBlank()) {
+                    put("custom_instructions", customInstructions)
+                }
+                if (multiSpeakerConfig != null) {
+                    put("multi_speaker", multiSpeakerConfig.toSpeechConfigJson())
+                }
+            }
+            File(outputDir, "book_settings.json").writeText(settings.toString(2))
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save book_settings.json: ${e.message}")
+        }
+    }
+
     suspend fun processBook(
         bookFile: File,
         customTitle: String? = null,
         onProgressUpdate: (currentChapter: Int, totalChapters: Int, chapterTitle: String) -> Unit = { _, _, _ -> }
     ): JSONObject = withContext(Dispatchers.IO) {
+        saveBookSettings()
         val parsedBook: ParsedBook = bookParser.parseFile(bookFile, customTitle)
         val progress = loadProgress()
         val completedChapters = progress.optJSONObject("completed_chapters") ?: JSONObject()
@@ -79,6 +98,18 @@ class AudiobookEngine(
         val rawChunksDir = File(outputDir, "raw_chunks").apply { mkdirs() }
 
         val chaptersArray = JSONArray()
+
+        // Initialize manifest if not existing
+        if (!manifestFile.exists() || manifestFile.length() == 0L) {
+            val initialManifest = JSONObject().apply {
+                put("title", parsedBook.title)
+                put("chapters_count", completedChapters.length())
+                put("total_chapters", parsedBook.chapters.size)
+                put("chapters", JSONArray())
+                put("status", "in_progress")
+            }
+            saveManifest(initialManifest)
+        }
 
         for (i in parsedBook.chapters.indices) {
             val chapter = parsedBook.chapters[i]
@@ -125,15 +156,16 @@ class AudiobookEngine(
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Gemini AI synthesis failed for chunk ${cIdx + 1}: ${e.message}")
+                        markManifestPaused(parsedBook.title, parsedBook.chapters.size, chaptersArray)
                         throw e
                     }
                 }
                 chunkFiles.add(chunkFile)
 
-                // Task 1: 60s pacing delay between network synthesis requests to strictly guard RPM quota
+                // 5s pacing delay between network synthesis requests to maintain healthy RPM quota
                 if (synthesizedNetwork && (cIdx < textChunks.size - 1 || i < parsedBook.chapters.size - 1)) {
-                    Log.i(TAG, "Pacing delay (60s) between Gemini TTS requests to maintain healthy RPM quota...")
-                    delay(60000L)
+                    Log.i(TAG, "Pacing delay (5s) between Gemini TTS requests to maintain healthy RPM quota...")
+                    delay(5000L)
                 }
             }
 
@@ -224,6 +256,25 @@ class AudiobookEngine(
         val tempManifest = File(outputDir, "book_manifest.json.tmp")
         tempManifest.writeText(manifest.toString(2))
         tempManifest.renameTo(manifestFile)
+    }
+
+    private fun markManifestPaused(title: String, totalChapters: Int, chaptersArray: JSONArray) {
+        try {
+            val pausedManifest = if (manifestFile.exists()) {
+                JSONObject(manifestFile.readText())
+            } else {
+                JSONObject().apply {
+                    put("title", title)
+                    put("total_chapters", totalChapters)
+                }
+            }
+            pausedManifest.put("status", "paused")
+            pausedManifest.put("chapters_count", chaptersArray.length())
+            pausedManifest.put("chapters", chaptersArray)
+            saveManifest(pausedManifest)
+        } catch (saveEx: Exception) {
+            Log.w(TAG, "Failed to save paused status: ${saveEx.message}")
+        }
     }
 
     private fun concatenateWavs(files: List<File>, outputFile: File): Long {

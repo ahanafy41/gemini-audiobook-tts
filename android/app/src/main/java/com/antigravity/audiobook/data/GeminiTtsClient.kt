@@ -27,6 +27,12 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.sin
 
 /**
+ * Exception thrown when Gemini API quota / rate limit (HTTP 429) is reached.
+ * Allows the caller to pause gracefully and give manual retry control to the user.
+ */
+class QuotaExceededException(message: String) : Exception(message)
+
+/**
  * Gemini 3.8 Flash TTS Client for Android.
  * Communicates with Google's Gemini TTS endpoint using OkHttp,
  * supports style presets, multi-speaker dialogue, and custom Voice Design IDs.
@@ -301,83 +307,50 @@ class GeminiTtsClient(
             .header("User-Agent", "GeminiAudiobookAndroid/1.0")
             .build()
 
-        var attempt = 0
-        val maxAttempts = 5
-        while (attempt < maxAttempts) {
-            attempt++
-            var shouldRetry = false
-            var retryDelayMs = 15000L
-            var audioResult: ByteArray? = null
-
-            try {
-                httpClient.newCall(request).execute().use { response ->
-                    if (response.code == 429) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.w(TAG, "Gemini HTTP 429 Rate Limit (attempt $attempt/$maxAttempts): $errorBody")
-                        if (attempt < maxAttempts) {
-                            shouldRetry = true
-                            retryDelayMs = 20000L
-                        } else {
-                            throw IllegalStateException("API error 429: تم تجاوز حد الطلبات للدقيقة (Rate limit). يرجى الانتظار والمحاولة مجدداً.")
-                        }
-                    } else if (response.code in 500..599) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.w(TAG, "Gemini HTTP Server Error ${response.code} (attempt $attempt/$maxAttempts): $errorBody")
-                        if (attempt < maxAttempts) {
-                            shouldRetry = true
-                            retryDelayMs = 15000L
-                        } else {
-                            throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
-                        }
-                    } else if (!response.isSuccessful) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
-                        throw IllegalStateException("API error ${response.code}: $errorBody")
-                    } else {
-                        val responseStr = response.body?.string() ?: ""
-                        val json = JSONObject(responseStr)
-                        val rawAudio = extractAudioBytes(json)
-                        val parsed = extractPcmData(rawAudio)
-                        audioResult = if (parsed != null) {
-                            createWavHeader(
-                                parsed.pcm,
-                                sampleRate = parsed.sampleRate,
-                                channels = parsed.channels,
-                                bitsPerSample = parsed.bitsPerSample
-                            )
-                        } else if (rawAudio.size >= 4 &&
-                            rawAudio[0] == 'R'.code.toByte() &&
-                            rawAudio[1] == 'I'.code.toByte() &&
-                            rawAudio[2] == 'F'.code.toByte() &&
-                            rawAudio[3] == 'F'.code.toByte()
-                        ) {
-                            rawAudio
-                        } else {
-                            createWavHeader(rawAudio, sampleRate = 24000)
-                        }
-                    }
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                if (response.code == 429) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.w(TAG, "Gemini HTTP 429 Rate Limit: $errorBody")
+                    throw QuotaExceededException("تم تجاوز حد الطلبات للدقيقة (Rate limit 429). يرجى الانتظار والمحاولة مجدداً.")
+                } else if (response.code in 500..599) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
+                    throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
+                } else if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                    throw IllegalStateException("API error ${response.code}: $errorBody")
                 }
-            } catch (ioe: IOException) {
-                Log.w(TAG, "Network or DNS connection error on attempt $attempt/$maxAttempts: ${ioe.message}")
-                if (attempt < maxAttempts) {
-                    shouldRetry = true
-                    retryDelayMs = (8000L * attempt).coerceAtMost(30000L)
+
+                val responseStr = response.body?.string() ?: ""
+                val json = JSONObject(responseStr)
+                val rawAudio = extractAudioBytes(json)
+                val parsed = extractPcmData(rawAudio)
+                return@withContext if (parsed != null) {
+                    createWavHeader(
+                        parsed.pcm,
+                        sampleRate = parsed.sampleRate,
+                        channels = parsed.channels,
+                        bitsPerSample = parsed.bitsPerSample
+                    )
+                } else if (rawAudio.size >= 4 &&
+                    rawAudio[0] == 'R'.code.toByte() &&
+                    rawAudio[1] == 'I'.code.toByte() &&
+                    rawAudio[2] == 'F'.code.toByte() &&
+                    rawAudio[3] == 'F'.code.toByte()
+                ) {
+                    rawAudio
                 } else {
-                    throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت أو الـ DNS بعد $maxAttempts محاولات: ${ioe.localizedMessage ?: ioe.message}")
+                    createWavHeader(rawAudio, sampleRate = 24000)
                 }
             }
-
-            if (audioResult != null) {
-                return@withContext audioResult!!
-            }
-
-            if (shouldRetry) {
-                Log.i(TAG, "Waiting ${retryDelayMs / 1000} seconds before retry attempt $attempt/$maxAttempts...")
-                delay(retryDelayMs)
-            }
+        } catch (qee: QuotaExceededException) {
+            throw qee
+        } catch (ioe: IOException) {
+            Log.w(TAG, "Network connection error: ${ioe.message}")
+            throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت: ${ioe.localizedMessage ?: ioe.message}")
         }
-
-        throw IllegalStateException("فشل توليد الصوت بعد $maxAttempts محاولات.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {

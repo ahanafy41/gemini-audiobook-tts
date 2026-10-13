@@ -38,11 +38,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import android.os.PowerManager
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.antigravity.audiobook.data.GeminiTtsClient
+import com.antigravity.audiobook.data.QuotaExceededException
 import com.antigravity.audiobook.domain.DialogueTurnAnnotator
 import com.antigravity.audiobook.domain.MultiSpeakerConfig
 import com.antigravity.audiobook.domain.VoiceProfile
@@ -97,6 +99,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     // Tab 1: Library Views
     private lateinit var btnAddBook: Button
     private lateinit var btnPasteText: Button
+    private lateinit var cardResumeIncompleteBook: View
+    private lateinit var textResumeBookInfo: TextView
+    private lateinit var btnResumeBook: Button
+    private lateinit var btnDismissResumeBook: Button
     private lateinit var listViewBooks: ListView
     private lateinit var textEmptyBooks: TextView
     private lateinit var textNowPlayingTitle: TextView
@@ -142,6 +148,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private val customVoices = mutableListOf<VoiceProfile>()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val booksList = mutableListOf<BookItem>()
     private lateinit var booksAdapter: BooksAdapter
@@ -214,6 +221,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         // Library Views
         btnAddBook = findViewById(R.id.btnAddBook)
         btnPasteText = findViewById(R.id.btnPasteText)
+        cardResumeIncompleteBook = findViewById(R.id.cardResumeIncompleteBook)
+        textResumeBookInfo = findViewById(R.id.textResumeBookInfo)
+        btnResumeBook = findViewById(R.id.btnResumeBook)
+        btnDismissResumeBook = findViewById(R.id.btnDismissResumeBook)
         listViewBooks = findViewById(R.id.listViewBooks)
         textEmptyBooks = findViewById(R.id.textEmptyBooks)
         textNowPlayingTitle = findViewById(R.id.textNowPlayingTitle)
@@ -1381,7 +1392,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
     private fun showDeleteConfirmation(book: BookItem) {
         val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
-        val isInProgress = totalChapters > book.chaptersCount
+        val status = book.manifest.optString("status", "")
+        val isInProgress = totalChapters > book.chaptersCount || status == "in_progress" || status == "paused"
 
         val options = if (isInProgress) {
             arrayOf(
@@ -1500,6 +1512,27 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
         booksAdapter.notifyDataSetChanged()
         textEmptyBooks.visibility = if (booksList.isEmpty()) View.VISIBLE else View.GONE
+
+        val incompleteBook = booksList.firstOrNull { book ->
+            val total = book.manifest.optInt("total_chapters", book.chaptersCount)
+            val st = book.manifest.optString("status", "")
+            (st == "in_progress" || st == "paused" || book.chaptersCount < total) && total > 0
+        }
+
+        if (incompleteBook != null) {
+            val total = incompleteBook.manifest.optInt("total_chapters", incompleteBook.chaptersCount)
+            cardResumeIncompleteBook.visibility = View.VISIBLE
+            textResumeBookInfo.text = "يوجد كتاب غير مكتمل: ${incompleteBook.title} (تم إنجاز ${incompleteBook.chaptersCount} من $total فصول)"
+            cardResumeIncompleteBook.contentDescription = "تنبيه: يوجد كتاب غير مكتمل، ${incompleteBook.title}، تم إنجاز ${incompleteBook.chaptersCount} من $total فصول. زر استئناف التحويل متاح."
+            btnResumeBook.setOnClickListener {
+                resumeIncompleteBook(incompleteBook)
+            }
+            btnDismissResumeBook.setOnClickListener {
+                cardResumeIncompleteBook.visibility = View.GONE
+            }
+        } else {
+            cardResumeIncompleteBook.visibility = View.GONE
+        }
     }
 
     private fun showPasteTextDialog() {
@@ -1690,7 +1723,53 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         }
     }
 
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock == null) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                wakeLock = powerManager?.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "GeminiAudiobook:ConversionWakeLock"
+                )?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            wakeLock?.acquire(120 * 60 * 1000L) // 2 hours maximum safeguard
+            Log.i(TAG, "WakeLock acquired for audiobook conversion")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire WakeLock: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.i(TAG, "WakeLock released")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release WakeLock: ${e.message}")
+        }
+    }
+
+    private fun showQuotaExceededDialog(sourceFile: File, bookDir: File, bookTitle: String) {
+        AlertDialog.Builder(this)
+            .setTitle("حد الاستخدام (HTTP 429)")
+            .setMessage("تم تجاوز حد الطلبات المسموح به للدقيقة لنموذج Gemini.\n\nتم حفظ جميع الفصول والمقاطع السابقة ولن تضيع.\nيمكنك الانتظار دقيقة وإعادة المحاولة الآن، أو تعديل مفتاح API.")
+            .setPositiveButton("إعادة المحاولة الآن") { _, _ ->
+                announceStatus("إعادة محاولة تحويل «$bookTitle»...")
+                startBookProcessing(sourceFile, bookDir, bookTitle)
+            }
+            .setNeutralButton("تعديل مفتاح API") { _, _ ->
+                bottomNav.selectedItemId = R.id.tab_settings
+                showApiKeyEditDialog()
+            }
+            .setNegativeButton("لاحقاً", null)
+            .show()
+    }
+
     private fun startBookProcessing(sourceFile: File, bookDir: File, bookTitle: String) {
+        acquireWakeLock()
         lifecycleScope.launch {
             try {
                 val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
@@ -1756,8 +1835,16 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing book: ${e.message}", e)
                 refreshBooksList()
-                announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
-                Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                val isQuota = e is QuotaExceededException || e.message?.contains("429") == true || e.message?.contains("Rate limit") == true
+                if (isQuota) {
+                    announceStatus("تم الوصول لحد الطلبات (429). الفصول المنجزة محفوظة. يمكنك إعادة المحاولة الآن من النافذة الظاهرة.")
+                    showQuotaExceededDialog(sourceFile, bookDir, bookTitle)
+                } else {
+                    announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
+                    Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                releaseWakeLock()
             }
         }
     }
@@ -1900,6 +1987,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
     }
 
     override fun onDestroy() {
+        releaseWakeLock()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         super.onDestroy()
     }
@@ -2192,17 +2280,18 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
 
             val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
             val status = book.manifest.optString("status", if (book.chaptersCount >= totalChapters) "completed" else "in_progress")
+            val isIncomplete = (status == "in_progress" || status == "paused" || book.chaptersCount < totalChapters) && totalChapters > 0
 
             val textTitle = view.findViewById<TextView>(R.id.textBookTitle)
             val textSubtitle = view.findViewById<TextView>(R.id.textBookSubtitle)
 
             textTitle.text = book.title
-            if (status == "in_progress" && totalChapters > book.chaptersCount) {
-                textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (قيد الإكمال)"
+            if (isIncomplete) {
+                textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (غير مكتمل)"
                 if (book.chaptersCount == 0) {
-                    view.contentDescription = "${book.title}، قيد الإكمال، 0 فصول جاهزة من أصل $totalChapters. اضغط للاستئناف، أو اضغط مطولاً للخيارات"
+                    view.contentDescription = "${book.title}، غير مكتمل، 0 فصول جاهزة من أصل $totalChapters. اضغط للاستئناف، أو اضغط مطولاً للخيارات"
                 } else {
-                    view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (قيد الإكمال). اضغط للتشغيل، أو اضغط مطولاً للخيارات والاستئناف"
+                    view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (غير مكتمل). اضغط للاستئناف أو التشغيل، أو اضغط مطولاً للخيارات"
                 }
             } else {
                 textSubtitle.text = "${book.chaptersCount} فصل (مكتمل)"
@@ -2210,8 +2299,22 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
             }
 
             view.setOnClickListener {
-                if (status == "in_progress" && book.chaptersCount == 0) {
-                    resumeIncompleteBook(book)
+                if (isIncomplete) {
+                    if (book.chaptersCount == 0) {
+                        resumeIncompleteBook(book)
+                    } else {
+                        AlertDialog.Builder(context)
+                            .setTitle(book.title)
+                            .setMessage("هذا الكتاب غير مكتمل (${book.chaptersCount} من أصل $totalChapters فصول جاهزة).\nماذا تود أن تفعل؟")
+                            .setPositiveButton("استئناف التحويل") { _, _ ->
+                                resumeIncompleteBook(book)
+                            }
+                            .setNeutralButton("تشغيل المنجز") { _, _ ->
+                                playBook(book, chapterIndex = 1)
+                            }
+                            .setNegativeButton(R.string.action_cancel, null)
+                            .show()
+                    }
                 } else {
                     playBook(book, chapterIndex = 1)
                 }
