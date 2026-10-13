@@ -12,7 +12,7 @@ class SmartTextChunker(
 ) {
 
     companion object {
-        const val DEFAULT_MAX_CHUNK_SIZE = 7500
+        const val DEFAULT_MAX_CHUNK_SIZE = 2000
         const val STRICT_LIMIT = 8000
         private const val TAG = "SmartTextChunker"
         private val SENTENCE_ENDINGS = Regex("([.!?؟؛\\n]+)")

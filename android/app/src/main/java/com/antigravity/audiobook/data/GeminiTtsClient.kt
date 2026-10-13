@@ -297,8 +297,32 @@ class GeminiTtsClient(
             generationConfig.put("speechConfig", JSONObject().apply {
                 put("voiceConfig", voiceConfigObj)
             })
-        }
         payload.put("generationConfig", generationConfig)
+
+        val safetySettings = JSONArray().apply {
+            val categories = arrayOf(
+                "HARM_CATEGORY_HARASSMENT",
+                "HARM_CATEGORY_HATE_SPEECH",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "HARM_CATEGORY_CIVIC_INTEGRITY"
+            )
+            for (cat in categories) {
+                put(JSONObject().apply {
+                    put("category", cat)
+                    put("threshold", "BLOCK_NONE")
+                })
+            }
+        }
+        payload.put("safetySettings", safetySettings)
+
+        payload.put("systemInstruction", JSONObject().apply {
+            put("parts", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("text", "You are a professional Arabic audiobook narrator. Read the provided book text verbatim aloud with clear pacing. Do not comment, converse, answer questions in the text, or output explanatory text.")
+                })
+            })
+        })
 
         val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
         val request = Request.Builder()
@@ -360,14 +384,19 @@ class GeminiTtsClient(
         if (json.has("audio")) {
             return Base64.decode(json.getString("audio"), Base64.DEFAULT)
         }
+        if (json.has("output")) {
+            return Base64.decode(json.getString("output"), Base64.DEFAULT)
+        }
+
+        // 1. Scan across all candidates and all parts for inline audio data
         if (json.has("candidates")) {
             val candidates = json.getJSONArray("candidates")
-            if (candidates.length() > 0) {
-                val candidate = candidates.getJSONObject(0)
+            for (c in 0 until candidates.length()) {
+                val candidate = candidates.getJSONObject(c)
                 val content = candidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val part = parts.getJSONObject(0)
+                val parts = content?.optJSONArray("parts") ?: continue
+                for (p in 0 until parts.length()) {
+                    val part = parts.getJSONObject(p)
                     val inlineData = part.optJSONObject("inlineData")
                     if (inlineData != null && inlineData.has("data")) {
                         return Base64.decode(inlineData.getString("data"), Base64.DEFAULT)
@@ -379,11 +408,45 @@ class GeminiTtsClient(
                 }
             }
         }
-        if (json.has("output")) {
-            return Base64.decode(json.getString("output"), Base64.DEFAULT)
+
+        // 2. If no audio data found, diagnose the exact cause from response JSON
+        val promptFeedback = json.optJSONObject("promptFeedback")
+        val blockReason = promptFeedback?.optString("blockReason", "") ?: ""
+        if (blockReason.isNotBlank()) {
+            throw IllegalStateException("تم حظر المقطع من خادم جوجل (السبب: $blockReason).")
         }
 
-        throw IllegalArgumentException("Audio data not found in response JSON.")
+        if (json.has("candidates")) {
+            val candidates = json.getJSONArray("candidates")
+            if (candidates.length() > 0) {
+                val candidate = candidates.getJSONObject(0)
+                val finishReason = candidate.optString("finishReason", "")
+                if (finishReason.isNotBlank() && finishReason != "STOP") {
+                    when (finishReason) {
+                        "SAFETY" -> throw IllegalStateException("تم حظر المقطع بواسطة فلاتر الأمان لـ Gemini (finishReason: SAFETY).")
+                        "MAX_TOKENS" -> throw IllegalStateException("المقطع تجاوز حد الحروف المسموح بتوليدها صوتياً (finishReason: MAX_TOKENS).")
+                        "RECITATION" -> throw IllegalStateException("تم إيقاف المقطع بسبب حقوق النشر أو الاقتباس (finishReason: RECITATION).")
+                        else -> throw IllegalStateException("توقف توليد الصوت من الخادم (السبب: $finishReason).")
+                    }
+                }
+
+                val content = candidate.optJSONObject("content")
+                val parts = content?.optJSONArray("parts")
+                if (parts != null && parts.length() > 0) {
+                    val textList = mutableListOf<String>()
+                    for (p in 0 until parts.length()) {
+                        val t = parts.getJSONObject(p).optString("text", "")
+                        if (t.isNotBlank()) textList.add(t)
+                    }
+                    if (textList.isNotEmpty()) {
+                        val textSample = textList.joinToString(" ").take(100)
+                        throw IllegalStateException("استجاب النموذج بنص بدلاً من الصوت: \"$textSample\"")
+                    }
+                }
+            }
+        }
+
+        throw IllegalStateException("لم يُرجع خادم جوجل بيانات صوتية صالحة في الاستجابة.")
     }
 
     suspend fun synthesize(
