@@ -8,23 +8,56 @@ app/build/
 *.iml
 local.properties
 
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
+# Audio Files & Generated Outputs
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.aac
+*.pcm
 output_sample/
 my_audiobook/
 raw_chunks/
+
+# AI Agent, Coding Skills & Planning Artifacts (Private to developer)
+*spec*.json
+*manifest*.json
+*report*.json
+eval_*.json
+test_results*.json
+scratch*.json
+*.scratch.json
+
+# Skill Planning, Scratchpad & Task Markdown Files
+tasks.md
+task*.md
+tasks_*.md
+spec.md
+spec_*.md
+scratchpad.md
+scratch*.md
+notes.md
+todo.md
+roadmap.md
+eval_*.md
+evaluation*.md
+*.scratch.md
+*.tmp.md
+.tasks/
+.scratch/
+scratch/
+
+# Environment Variables & Secrets
+.env
+.env.*
+
+
+# Logs & Temporary files
+*.log
 .tmp/
 *.tmp
 .backups/
-debug_manifest.json
-*.wav
-
-# Internal Planning & Development Specs (Private to developer)
-project_spec.json
-tasks.md
-references_manifest.json
-.env
-.env.*
+.DS_Store
+Thumbs.db
 
