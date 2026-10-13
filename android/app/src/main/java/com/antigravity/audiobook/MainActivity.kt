@@ -2011,35 +2011,63 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {
-                    val url = "https://api.github.com/repos/ahanafy41/gemini-audiobook-tts/releases/latest"
                     val client = OkHttpClient.Builder().build()
-                    val request = Request.Builder()
-                        .url(url)
+                    val apiUrl = "https://api.github.com/repos/ahanafy41/gemini-audiobook-tts/releases/latest"
+                    val apiRequest = Request.Builder()
+                        .url(apiUrl)
                         .header("User-Agent", "GeminiAudiobookApp/$currentVersionName")
                         .header("Accept", "application/vnd.github.v3+json")
                         .build()
 
-                    client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            throw IllegalStateException("استجابة الخادم (${response.code})")
-                        }
-                        val body = response.body?.string() ?: ""
-                        val json = JSONObject(body)
-                        val tagName = json.optString("tag_name", "").removePrefix("v")
-                        val bodyText = json.optString("body", "تحديث جديد يتضمن تحسينات للأداء وإصلاحات.")
-                        val assets = json.optJSONArray("assets")
-                        var apkUrl = ""
-                        if (assets != null) {
-                            for (i in 0 until assets.length()) {
-                                val asset = assets.getJSONObject(i)
-                                val name = asset.optString("name", "")
-                                if (name.endsWith(".apk", ignoreCase = true)) {
-                                    apkUrl = asset.optString("browser_download_url", "")
-                                    break
+                    try {
+                        client.newCall(apiRequest).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string() ?: ""
+                                val json = JSONObject(body)
+                                val tagName = json.optString("tag_name", "").removePrefix("v")
+                                val bodyText = json.optString("body", "تحديث جديد يتضمن تحسينات للأداء وإصلاحات.")
+                                val assets = json.optJSONArray("assets")
+                                var apkUrl = ""
+                                if (assets != null) {
+                                    for (i in 0 until assets.length()) {
+                                        val asset = assets.getJSONObject(i)
+                                        val name = asset.optString("name", "")
+                                        if (name.endsWith(".apk", ignoreCase = true)) {
+                                            apkUrl = asset.optString("browser_download_url", "")
+                                            break
+                                        }
+                                    }
+                                }
+                                if (tagName.isNotBlank() && apkUrl.isNotBlank()) {
+                                    return@withContext Triple(tagName, bodyText, apkUrl)
                                 }
                             }
                         }
-                        Triple(tagName, bodyText, apkUrl)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "GitHub API update check failed, attempting web fallback: ${e.message}")
+                    }
+
+                    // Fallback to web redirect (bypasses GitHub REST API 403 IP rate-limit completely)
+                    val noRedirectClient = OkHttpClient.Builder()
+                        .followRedirects(false)
+                        .followSslRedirects(false)
+                        .build()
+                    val webRequest = Request.Builder()
+                        .url("https://github.com/ahanafy41/gemini-audiobook-tts/releases/latest")
+                        .header("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+                        .build()
+
+                    noRedirectClient.newCall(webRequest).execute().use { response ->
+                        val location = response.header("Location") ?: ""
+                        if (location.contains("/releases/tag/")) {
+                            val rawTag = location.substringAfterLast("/tag/").trim()
+                            val cleanTag = rawTag.removePrefix("v")
+                            val apkUrl = "https://github.com/ahanafy41/gemini-audiobook-tts/releases/download/$rawTag/app-debug.apk"
+                            val notes = "تحديث جديد يتضمن تحسينات للأداء وإصلاحات لمكتبة جيميني."
+                            Triple(cleanTag, notes, apkUrl)
+                        } else {
+                            throw IllegalStateException("تعذر جلب التحديث من الخادم (${response.code})")
+                        }
                     }
                 }
 

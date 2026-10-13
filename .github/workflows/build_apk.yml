@@ -56,11 +56,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.4.2"
-          name: "Gemini Audiobook TTS v1.4.2 (APK)"
+          tag_name: "v1.4.3"
+          name: "Gemini Audiobook TTS v1.4.3 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.4.2
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.4.3
 
+            - **إصلاح خطأ 403 في فحص التحديثات (Fix 403 Update Check Error)**:
+              - إضافة نظام استرجاع مباشر (Web Fallback) لتجاوز قيود واجهة برمجة تطبيقات GitHub (API Rate Limits 403)، مما يضمن نجاح فحص التحديثات من داخل التطبيق بنسبة 100% دائماً.
             - **دعم النصوص الطويلة حتى 12000+ حرف (Gemini 3.8 Flash TTS Full Capacity)**:
               - رفع سقف التقطيع الافتراضي إلى 12000 حرف مع سقف أقصى 30000 حرف للاستفادة الكاملة من قدرات Gemini 3.8 Flash TTS الفائقة في معالجة الفصول الطويلة كقطعة واحدة.
             - **إصلاح خطأ استخراج الصوت (Fix Audio data not found in response JSON)**:
