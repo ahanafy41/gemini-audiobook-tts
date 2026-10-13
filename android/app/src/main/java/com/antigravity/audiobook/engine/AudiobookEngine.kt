@@ -32,7 +32,8 @@ class AudiobookEngine(
     private val ttsClient: GeminiTtsClient,
     private val voiceName: String = "Charon",
     private val stylePreset: VoiceStylePreset = VoiceStylePreset.NATURAL,
-    private val multiSpeakerConfig: MultiSpeakerConfig? = null
+    private val multiSpeakerConfig: MultiSpeakerConfig? = null,
+    private val customInstructions: String? = null
 ) {
 
     companion object {
@@ -67,9 +68,10 @@ class AudiobookEngine(
 
     suspend fun processBook(
         bookFile: File,
+        customTitle: String? = null,
         onProgressUpdate: (currentChapter: Int, totalChapters: Int, chapterTitle: String) -> Unit = { _, _, _ -> }
     ): JSONObject = withContext(Dispatchers.IO) {
-        val parsedBook: ParsedBook = bookParser.parseFile(bookFile)
+        val parsedBook: ParsedBook = bookParser.parseFile(bookFile, customTitle)
         val progress = loadProgress()
         val completedChapters = progress.optJSONObject("completed_chapters") ?: JSONObject()
 
@@ -111,7 +113,8 @@ class AudiobookEngine(
                             text = chunkText,
                             voiceName = voiceName,
                             stylePreset = stylePreset,
-                            multiSpeakerConfig = multiSpeakerConfig
+                            multiSpeakerConfig = multiSpeakerConfig,
+                            customInstructions = customInstructions
                         )
                         if (audioData.size > 1000) {
                             ttsClient.saveAudioAtomically(chunkFile, audioData)
@@ -127,10 +130,10 @@ class AudiobookEngine(
                 }
                 chunkFiles.add(chunkFile)
 
-                // Protect RPM quota: if network synthesis occurred and more chunks remain, apply 10s pacing delay
+                // Task 1: 60s pacing delay between network synthesis requests to strictly guard RPM quota
                 if (synthesizedNetwork && (cIdx < textChunks.size - 1 || i < parsedBook.chapters.size - 1)) {
-                    Log.i(TAG, "Pacing delay (10s) between Gemini TTS requests to maintain healthy RPM quota...")
-                    delay(10000L)
+                    Log.i(TAG, "Pacing delay (60s) between Gemini TTS requests to maintain healthy RPM quota...")
+                    delay(60000L)
                 }
             }
 
@@ -139,7 +142,7 @@ class AudiobookEngine(
             val durationSec = durationMs / 1000
 
             try {
-                AudioExporter.exportChapterToDownloads(
+                AudioExporter.exportChapterToDedicatedFolder(
                     context = context,
                     chapterWav = chapterWav,
                     bookTitle = parsedBook.title,
@@ -147,7 +150,7 @@ class AudiobookEngine(
                     chapterTitle = chapter.chapterTitle
                 )
             } catch (e: Exception) {
-                Log.w(TAG, "Background export to Downloads skipped: ${e.message}")
+                Log.w(TAG, "Background export to GeminiAudiobook skipped: ${e.message}")
             }
 
             val chapterObj = JSONObject().apply {
@@ -177,12 +180,35 @@ class AudiobookEngine(
             saveManifest(currentManifest)
         }
 
+        // Task 3: Auto-merge all chapters into a single full audiobook file when multi-chapter synthesis finishes
+        if (parsedBook.chapters.size > 1) {
+            try {
+                val allChapterFiles = (1..parsedBook.chapters.size).mapNotNull { idx ->
+                    val f = File(chaptersDir, String.format("chapter_%03d.wav", idx))
+                    if (f.exists() && f.length() > 1000) f else null
+                }
+                if (allChapterFiles.size == parsedBook.chapters.size) {
+                    val fullBookWav = File(outputDir, "full_book.wav")
+                    val fullDurationMs = concatenateWavs(allChapterFiles, fullBookWav)
+                    val fullDurationSec = fullDurationMs / 1000
+                    Log.i(TAG, "Successfully auto-merged ${allChapterFiles.size} chapters into full_book.wav ($fullDurationSec s)")
+                    AudioExporter.exportFullBookAudio(context, fullBookWav, parsedBook.title)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error auto-merging full audiobook: ${e.message}", e)
+            }
+        }
+
         val finalManifest = JSONObject().apply {
             put("title", parsedBook.title)
             put("chapters_count", chaptersArray.length())
             put("total_chapters", parsedBook.chapters.size)
             put("chapters", chaptersArray)
             put("status", "completed")
+            val fullWav = File(outputDir, "full_book.wav")
+            if (fullWav.exists() && fullWav.length() > 1000) {
+                put("full_audiobook_file", "full_book.wav")
+            }
         }
         saveManifest(finalManifest)
 

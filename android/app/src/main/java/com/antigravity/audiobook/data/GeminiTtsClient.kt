@@ -130,7 +130,8 @@ class GeminiTtsClient(
         text: String,
         voiceName: String = "Charon",
         stylePreset: VoiceStylePreset = VoiceStylePreset.NATURAL,
-        multiSpeakerConfig: MultiSpeakerConfig? = null
+        multiSpeakerConfig: MultiSpeakerConfig? = null,
+        customInstructions: String? = null
     ): ByteArray = withContext(Dispatchers.IO) {
         val cleanText = text.trim()
         if (cleanText.isEmpty()) {
@@ -150,14 +151,26 @@ class GeminiTtsClient(
             })
         }
 
+        val instructionTag = if (!customInstructions.isNullOrBlank()) {
+            "[Voice Instructions: ${customInstructions.trim()}]"
+        } else null
+
         if (multiSpeakerConfig != null && multiSpeakerConfig.isEnabled) {
             val annotator = DialogueTurnAnnotator("Narrator", "Character")
             val turns = annotator.annotateText(cleanText)
             val partsArray = JSONArray()
             for (index in turns.indices) {
                 val turn = turns[index]
-                val turnText = if (index == 0 && stylePreset != VoiceStylePreset.NATURAL) {
-                    "${stylePreset.directorPrompt}\n${turn.text}"
+                val turnText = if (index == 0) {
+                    when {
+                        instructionTag != null && stylePreset != VoiceStylePreset.NATURAL ->
+                            "${stylePreset.directorPrompt}\n$instructionTag\n${turn.text}"
+                        instructionTag != null ->
+                            "$instructionTag\n${turn.text}"
+                        stylePreset != VoiceStylePreset.NATURAL ->
+                            "${stylePreset.directorPrompt}\n${turn.text}"
+                        else -> turn.text
+                    }
                 } else {
                     turn.text
                 }
@@ -175,10 +188,14 @@ class GeminiTtsClient(
             })
             generationConfig.put("speechConfig", multiSpeakerConfig.toSpeechConfigJson())
         } else {
-            val promptText = if (stylePreset != VoiceStylePreset.NATURAL) {
-                "${stylePreset.directorPrompt}\n$cleanText"
-            } else {
-                cleanText
+            val promptText = when {
+                instructionTag != null && stylePreset != VoiceStylePreset.NATURAL ->
+                    "${stylePreset.directorPrompt}\n$instructionTag\n$cleanText"
+                instructionTag != null ->
+                    "$instructionTag\n$cleanText"
+                stylePreset != VoiceStylePreset.NATURAL ->
+                    "${stylePreset.directorPrompt}\n$cleanText"
+                else -> cleanText
             }
             val partsArray = JSONArray().apply {
                 put(JSONObject().apply {

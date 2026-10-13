@@ -379,6 +379,18 @@
                     android:textColor="@color/text_high_contrast"
                     android:backgroundTint="@color/surface_dark" />
 
+                <!-- Custom Voice Instructions Button -->
+                <Button
+                    android:id="@+id/btnCustomVoiceInstructions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="52dp"
+                    android:layout_marginTop="8dp"
+                    android:text="التعليمات المخصصة للصوت: غير محددة"
+                    android:contentDescription="زر ضبط تعليمات وتوجيهات الأداء الصوتي المخصصة"
+                    android:textColor="@color/text_high_contrast"
+                    android:backgroundTint="@color/surface_dark" />
+
                 <!-- 3. Multi-Speaker Dialogue Section -->
                 <TextView
                     android:layout_width="match_parent"

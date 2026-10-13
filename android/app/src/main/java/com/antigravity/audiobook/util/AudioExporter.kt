@@ -22,7 +22,9 @@ object AudioExporter {
     private const val TAG = "AudioExporter"
     private const val AUTHORITY = "com.antigravity.audiobook.fileprovider"
 
-    fun exportChapterToDownloads(
+    const val DEDICATED_DIR = "GeminiAudiobook"
+
+    fun exportChapterToDedicatedFolder(
         context: Context,
         chapterWav: File,
         bookTitle: String,
@@ -41,10 +43,10 @@ object AudioExporter {
                 val values = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "audio/wav")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Audiobooks/$safeBook")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/$DEDICATED_DIR/$safeBook")
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
-                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
                 if (uri != null) {
                     resolver.openOutputStream(uri)?.use { out ->
                         chapterWav.inputStream().use { inp ->
@@ -54,27 +56,85 @@ object AudioExporter {
                     values.clear()
                     values.put(MediaStore.MediaColumns.IS_PENDING, 0)
                     resolver.update(uri, values, null, null)
-                    Log.i(TAG, "Exported chapter $chapterIndex to MediaStore: $fileName")
+                    Log.i(TAG, "Exported chapter $chapterIndex to GeminiAudiobook MediaStore: $fileName")
                     uri
                 } else null
             } else {
-                val pubDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Audiobooks/$safeBook").apply { mkdirs() }
+                val pubDir = File(Environment.getExternalStorageDirectory(), "$DEDICATED_DIR/$safeBook").apply { mkdirs() }
                 val target = File(pubDir, fileName)
                 chapterWav.copyTo(target, overwrite = true)
                 Log.i(TAG, "Exported chapter $chapterIndex to public file: ${target.absolutePath}")
                 Uri.fromFile(target)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to export chapter $chapterIndex to downloads: ${e.message}", e)
+            Log.e(TAG, "Failed to export chapter $chapterIndex to GeminiAudiobook: ${e.message}", e)
             null
         }
     }
 
-    fun exportBookToDownloads(context: Context, book: BookItem): Pair<Int, String> {
+    // Alias for backward compatibility
+    fun exportChapterToDownloads(
+        context: Context,
+        chapterWav: File,
+        bookTitle: String,
+        chapterIndex: Int,
+        chapterTitle: String
+    ): Uri? = exportChapterToDedicatedFolder(context, chapterWav, bookTitle, chapterIndex, chapterTitle)
+
+    fun exportFullBookAudio(
+        context: Context,
+        fullWav: File,
+        bookTitle: String
+    ): Uri? {
+        if (!fullWav.exists() || fullWav.length() <= 1000) return null
+        val safeBook = bookTitle.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_").trim().ifBlank { "audiobook" }
+        val fileName = "${safeBook}_كامل.wav"
+
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "audio/wav")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_MUSIC}/$DEDICATED_DIR/$safeBook")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { out ->
+                        fullWav.inputStream().use { inp ->
+                            inp.copyTo(out)
+                        }
+                    }
+                    values.clear()
+                    values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+                    Log.i(TAG, "Exported full merged audiobook to GeminiAudiobook: $fileName")
+                    uri
+                } else null
+            } else {
+                val pubDir = File(Environment.getExternalStorageDirectory(), "$DEDICATED_DIR/$safeBook").apply { mkdirs() }
+                val target = File(pubDir, fileName)
+                fullWav.copyTo(target, overwrite = true)
+                Log.i(TAG, "Exported full merged audiobook to public file: ${target.absolutePath}")
+                Uri.fromFile(target)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to export full audiobook: ${e.message}", e)
+            null
+        }
+    }
+
+    fun exportBookToDedicatedFolder(context: Context, book: BookItem): Pair<Int, String> {
         val chapters = book.manifest.optJSONArray("chapters") ?: return Pair(0, "")
         val safeBook = book.title.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_").trim().ifBlank { "audiobook" }
-        val destPathDisplay = "Download/Audiobooks/$safeBook"
+        val destPathDisplay = "$DEDICATED_DIR/$safeBook"
         var exportedCount = 0
+
+        val fullWav = File(book.bookDir, "full_book.wav")
+        if (fullWav.exists() && fullWav.length() > 1000) {
+            exportFullBookAudio(context, fullWav, book.title)
+        }
 
         for (i in 0 until chapters.length()) {
             val chObj = chapters.getJSONObject(i)
@@ -89,7 +149,7 @@ object AudioExporter {
                 File(book.bookDir, "chapters/chapter_%03d.wav".format(chIdx))
             ).firstOrNull { it.exists() && it.length() > 0 } ?: continue
 
-            val uri = exportChapterToDownloads(context, resolved, book.title, chIdx, title)
+            val uri = exportChapterToDedicatedFolder(context, resolved, book.title, chIdx, title)
             if (uri != null) {
                 exportedCount++
             }
@@ -97,6 +157,9 @@ object AudioExporter {
 
         return Pair(exportedCount, destPathDisplay)
     }
+
+    fun exportBookToDownloads(context: Context, book: BookItem): Pair<Int, String> =
+        exportBookToDedicatedFolder(context, book)
 
     fun shareBookAudio(context: Context, book: BookItem): Boolean {
         val chapters = book.manifest.optJSONArray("chapters") ?: return false

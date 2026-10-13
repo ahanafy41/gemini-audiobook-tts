@@ -31,24 +31,44 @@ class BookParser(
 
     private val markdownStripper = MarkdownStripper()
 
-    fun parseFile(file: File): ParsedBook {
+    fun parseFile(file: File, explicitTitle: String? = null): ParsedBook {
         val content = readFileSafe(file)
-        val title = file.nameWithoutExtension.replace('_', ' ').trim()
-        return parseContent(content, title, file.absolutePath)
+        val fileTitle = file.nameWithoutExtension.replace('_', ' ').trim()
+        val titleCandidate = when {
+            !explicitTitle.isNullOrBlank() -> explicitTitle.trim()
+            fileTitle.isNotBlank() && fileTitle != "source_book" && fileTitle != "source book" -> fileTitle
+            else -> "بدون اسم"
+        }
+        return parseContent(content, titleCandidate, file.absolutePath)
     }
 
-    fun parseContent(content: String, title: String = "كتاب صوتي", filePath: String = ""): ParsedBook {
+    fun parseContent(content: String, title: String = "بدون اسم", filePath: String = ""): ParsedBook {
         val trimmed = content.trim()
+        val resolvedTitle = if (title.isBlank()) "بدون اسم" else title.trim()
         if (trimmed.isEmpty()) {
-            return ParsedBook(title, filePath, 0, emptyList())
+            return ParsedBook(resolvedTitle, filePath, 0, emptyList())
         }
 
         // 1. Check for Markdown headers
         if (Regex("^#{1,6}\\s+.+", RegexOption.MULTILINE).containsMatchIn(trimmed)) {
-            Log.i(TAG, "Markdown headers detected for '$title'.")
+            Log.i(TAG, "Markdown headers detected for '$resolvedTitle'.")
             val rawChapters = markdownStripper.extractChapters(trimmed)
-            val chapters = aggregateSections(rawChapters, continuousChapterSize)
-            return ParsedBook(title, filePath, trimmed.length, chapters)
+            var chapters = aggregateSections(rawChapters, continuousChapterSize)
+
+            // If the book title was default, and first heading is # Title, adopt it as book title
+            var effectiveTitle = resolvedTitle
+            if ((resolvedTitle == "بدون اسم" || resolvedTitle == "كتاب صوتي") && chapters.isNotEmpty()) {
+                val firstCandidate = chapters.first().chapterTitle.trim()
+                if (firstCandidate.isNotBlank() && firstCandidate != "مقدمة") {
+                    effectiveTitle = firstCandidate
+                    // If this chapter only contained the title itself, remove it from chapters list
+                    if (chapters.size > 1 && chapters.first().text.trim().equals(effectiveTitle, ignoreCase = true)) {
+                        chapters = chapters.drop(1)
+                    }
+                }
+            }
+
+            return ParsedBook(effectiveTitle, filePath, trimmed.length, chapters)
         }
 
         // 2. Scan for Arabic & English chapter headings
