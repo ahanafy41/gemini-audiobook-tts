@@ -28,3 +28,10 @@ references_manifest.json
 .env
 .env.*
 
+
+# User Data, Audio Outputs, and Private Settings (Never commit API keys or user outputs)
+settings.json
+key_quotas.json
+audiobook_output/
+*.m3u
+*.cue

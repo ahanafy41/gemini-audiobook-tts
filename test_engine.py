@@ -1,3 +1,10 @@
+from key_quota_manager import (
+    KeyQuotaManager,
+    compute_key_id,
+    mask_key,
+    parse_retry_delay_from_error,
+    get_model_daily_cap,
+)
 #!/usr/bin/env python3
 """
 Comprehensive Test Suite for Gemini Audiobook TTS Engine.
@@ -221,6 +228,233 @@ class TestAudiobookEngineIntegration(unittest.TestCase):
         manifest_resume = self.engine.process_book(sample_book)
         self.assertEqual(manifest_resume["total_chapters"], 2)
 
+    def test_adaptive_chunking_and_unformatted_text(self) -> None:
+        from smart_chunker import get_adaptive_chunk_limits
+
+        limits_38 = get_adaptive_chunk_limits("gemini-3.8-flash-tts")
+        self.assertEqual(limits_38["target"], 8000)
+        self.assertEqual(limits_38["max_window"], 8500)
+
+        limits_legacy = get_adaptive_chunk_limits("gemini-3.1-flash-tts-preview")
+        self.assertEqual(limits_legacy["target"], 2000)
+        self.assertEqual(limits_legacy["max_window"], 2300)
+
+        chunker_legacy = SmartTextChunker(model_id="gemini-3.1-flash-tts-preview")
+        raw_unpunctuated = " ".join(["كلمة"] * 900)
+        chunks = chunker_legacy.chunk_text(raw_unpunctuated)
+        self.assertGreater(len(chunks), 1)
+        for ch in chunks:
+            self.assertLessEqual(len(ch), 2300)
+
+    def test_docx_extraction_and_dialogue_annotator(self) -> None:
+        import zipfile
+        from gemini_tts_client import DialogueTurnAnnotator
+
+        docx_path = self.temp_dir / "sample_story.docx"
+        xml_content = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            "<w:p><w:r><w:t>الفصل الأول: البداية</w:t></w:r></w:p>"
+            "<w:p><w:r><w:t>همس الرجل بصوت خافت: «لا تقترب من الباب! (تنهيدة)»</w:t></w:r></w:p>"
+            "</w:body></w:document>"
+        )
+        with zipfile.ZipFile(docx_path, "w") as zf:
+            zf.writestr("word/document.xml", xml_content.encode("utf-8"))
+
+        parser = BookParser()
+        parsed_book = parser.parse_file(docx_path)
+        self.assertGreaterEqual(len(parsed_book.chapters), 1)
+        self.assertIn("الباب", parsed_book.chapters[0].text)
+
+        turns = DialogueTurnAnnotator.extract_turns(
+            "همس الرجل بصوت خافت: «لا تقترب من الباب! (تنهيدة)»"
+        )
+        self.assertGreaterEqual(len(turns), 2)
+        dialogue_turn = [t for t in turns if t["speaker"] == "Speaker2"][0]
+        self.assertIn("whisper", dialogue_turn["style"])
+        self.assertIn("<sigh>", dialogue_turn["text"])
+
+    def test_multi_key_rotation_and_model_commitment(self) -> None:
+        client = GeminiTtsClient(
+            api_keys=["key_one", "key_two"],
+            model_id="gemini-3.8-flash-tts",
+            mock_mode=True,
+        )
+        self.assertEqual(client.get_model_daily_limit("gemini-3.8-flash-tts"), 100)
+        self.assertEqual(client.get_model_daily_limit("gemini-3.1-flash-tts-preview"), 10)
+        self.assertEqual(client.get_active_api_key(), "key_one")
+        rotated = client._rotate_to_next_key(reason="unit_test")
+        self.assertTrue(rotated)
+        self.assertEqual(client.get_active_api_key(), "key_two")
+        rotated_end = client._rotate_to_next_key(reason="unit_test_exhausted")
+        self.assertFalse(rotated_end)
+        self.assertEqual(client.model_id, "gemini-3.8-flash-tts")
+
+
+class TestUniversalMultilingualDialogue(unittest.TestCase):
+    """Tests universal structural dialogue detection across multiple world languages."""
+
+    def test_arabic_dashed_dialogue(self) -> None:
+        from gemini_tts_client import DialogueTurnAnnotator
+        text = "وقف الضابط أمام الباب ثم سأل:\n- هل أنتِ ليلى؟\nقال أبي مدافعاً:\n- نعم، هذه ابنتي."
+        turns = DialogueTurnAnnotator.extract_turns(text)
+        spk2 = [t for t in turns if t["speaker"] == "Speaker2"]
+        self.assertEqual(len(spk2), 2)
+        self.assertIn("هل أنتِ ليلى؟", spk2[0]["text"])
+        self.assertIn("نعم، هذه ابنتي.", spk2[1]["text"])
+
+    def test_french_dashed_dialogue(self) -> None:
+        from gemini_tts_client import DialogueTurnAnnotator
+        text = "Pierre regarda la mer avec tristesse.\n— Bonjour mon ami, — dit-il doucement.\n— Comment vas-tu ?"
+        turns = DialogueTurnAnnotator.extract_turns(text)
+        spk2 = [t for t in turns if t["speaker"] == "Speaker2"]
+        self.assertGreaterEqual(len(spk2), 1)
+        self.assertIn("Bonjour mon ami", spk2[0]["text"])
+
+    def test_english_em_dash_dialogue(self) -> None:
+        from gemini_tts_client import DialogueTurnAnnotator
+        text = "The inspector stepped into the room.\n— Where were you last night? — asked the detective.\n— I was at home, — replied John."
+        turns = DialogueTurnAnnotator.extract_turns(text)
+        spk2 = [t for t in turns if t["speaker"] == "Speaker2"]
+        self.assertGreaterEqual(len(spk2), 2)
+        self.assertIn("Where were you", spk2[0]["text"])
+        self.assertIn("I was at home", spk2[1]["text"])
+
+    def test_german_quoted_dialogue(self) -> None:
+        from gemini_tts_client import DialogueTurnAnnotator
+        text = "Der alte Mann stand am Fenster.\n„Guten Tag!“, sagte er leise."
+        turns = DialogueTurnAnnotator.extract_turns(text)
+        spk2 = [t for t in turns if t["speaker"] == "Speaker2"]
+        self.assertEqual(len(spk2), 1)
+        self.assertIn("Guten Tag!", spk2[0]["text"])
+
+    def test_japanese_bracket_dialogue(self) -> None:
+        from gemini_tts_client import DialogueTurnAnnotator
+        text = "田中さんはドアを開けた。\n「こんにちは」と田中さんは笑顔で言いました。"
+        turns = DialogueTurnAnnotator.extract_turns(text)
+        spk2 = [t for t in turns if t["speaker"] == "Speaker2"]
+        self.assertEqual(len(spk2), 1)
+        self.assertIn("こんにちは", spk2[0]["text"])
+
+
+
+
+class TestKeyQuotaManager(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp_dir = tempfile.mkdtemp(prefix="quota_test_")
+        self.quota_file = Path(self.tmp_dir) / "test_key_quotas.json"
+        self.manager = KeyQuotaManager(self.quota_file)
+        self.key1 = "AIzaSyKey111111111111111111111111"
+        self.key2 = "AIzaSyKey222222222222222222222222"
+        self.key3 = "AIzaSyKey333333333333333333333333"
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_key_identification_and_masking(self) -> None:
+        key_id = compute_key_id(self.key1)
+        self.assertEqual(len(key_id), 16)
+        masked = mask_key(self.key1)
+        self.assertTrue(masked.startswith("AIzaSy..."))
+        self.assertTrue(masked.endswith("1111"))
+
+    def test_parse_retry_delay_from_error(self) -> None:
+        # 1. JSON RetryInfo
+        json_err = '{"error": {"code": 429, "message": "RESOURCE_EXHAUSTED", "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "1800s"}]}}'
+        self.assertEqual(parse_retry_delay_from_error(json_err), 1800)
+
+        # 2. Text regex: Xh Ym Zs
+        text_err1 = "Quota exceeded. Please retry in 4h 15m 30s."
+        self.assertEqual(parse_retry_delay_from_error(text_err1), 4 * 3600 + 15 * 60 + 30)
+
+        # 3. Text regex: Xm Ys
+        text_err2 = "Limit reached. Retry in 10m 20s."
+        self.assertEqual(parse_retry_delay_from_error(text_err2), 10 * 60 + 20)
+
+        # 4. Text regex: Xs
+        text_err3 = "RESOURCE_EXHAUSTED. Retry after 45s."
+        self.assertEqual(parse_retry_delay_from_error(text_err3), 45)
+
+    def test_quota_exhaustion_and_auto_renewal(self) -> None:
+        model = "gemini-3.8-flash-tts"
+        self.assertTrue(self.manager.is_key_available(self.key1, model))
+
+        # Record 429 with 1 hour delay
+        self.manager.record_429_exhaustion(self.key1, model, retry_delay_seconds=3600)
+        self.assertFalse(self.manager.is_key_available(self.key1, model))
+
+        info = self.manager.get_key_status_info(self.key1, model)
+        self.assertEqual(info["status"], "EXHAUSTED")
+        self.assertGreater(info["seconds_until_reset"], 0)
+
+        # Simulate renewal in the past
+        self.manager.record_429_exhaustion(self.key1, model, retry_delay_seconds=-5)
+        self.assertTrue(self.manager.is_key_available(self.key1, model))
+        info_renewed = self.manager.get_key_status_info(self.key1, model)
+        self.assertEqual(info_renewed["status"], "AVAILABLE")
+        self.assertEqual(info_renewed["requests_today"], 0)
+
+    def test_model_quota_isolation(self) -> None:
+        # Exhaust on 3.8
+        self.manager.record_429_exhaustion(self.key1, "gemini-3.8-flash-tts", retry_delay_seconds=3600)
+        self.assertFalse(self.manager.is_key_available(self.key1, "gemini-3.8-flash-tts"))
+
+        # Should remain completely available on legacy models (separate Google quotas)
+        self.assertTrue(self.manager.is_key_available(self.key1, "gemini-2.5-flash-preview-tts"))
+        self.assertTrue(self.manager.is_key_available(self.key1, "gemini-3.1-flash-tts-preview"))
+
+    def test_key_selection_and_skipping(self) -> None:
+        model = "gemini-3.8-flash-tts"
+        keys = [self.key1, self.key2, self.key3]
+
+        # Exhaust key 1 and key 2
+        self.manager.record_429_exhaustion(self.key1, model, retry_delay_seconds=3600)
+        self.manager.record_429_exhaustion(self.key2, model, retry_delay_seconds=7200)
+
+        # Automatically picks key 3 (index 2)
+        first_idx = self.manager.find_first_available_key_index(keys, model)
+        self.assertEqual(first_idx, 2)
+
+        # If searching from index 0, skips index 1 and returns index 2
+        next_idx, next_key = self.manager.get_next_available_key(keys, 0, model)
+        self.assertEqual(next_idx, 2)
+        self.assertEqual(next_key, self.key3)
+
+    def test_atomic_persistence(self) -> None:
+        model = "gemini-3.8-flash-tts"
+        self.manager.record_429_exhaustion(self.key1, model, retry_delay_seconds=5000)
+
+        # Create a fresh manager instance reading the same file
+        fresh_mgr = KeyQuotaManager(self.quota_file)
+        self.assertFalse(fresh_mgr.is_key_available(self.key1, model))
+        info = fresh_mgr.get_key_status_info(self.key1, model)
+        self.assertEqual(info["status"], "EXHAUSTED")
+
+    def test_worker_skips_exhausted_key_on_startup(self) -> None:
+        from desktop.worker import SynthesisWorker
+        model = "gemini-3.8-flash-tts"
+        # Mark key1 exhausted
+        self.manager.record_429_exhaustion(self.key1, model, retry_delay_seconds=3600)
+
+        worker = SynthesisWorker(
+            book_text="نص تجريبي لاختبار المفاتيح.",
+            book_title="كتاب_تجريبي",
+            output_dir=self.tmp_dir,
+            api_keys=[self.key1, self.key2],
+            model_id=model,
+            mock_mode=True,
+            quota_manager=self.manager,
+        )
+        # Advance selection as worker does on start
+        first_ready = worker.quota_manager.find_first_available_key_index(
+            worker.api_keys,
+            worker.model_id,
+            preferred_index=worker.active_key_index,
+        )
+        self.assertEqual(first_ready, 1)  # Skipped key1 (index 0), picked key2 (index 1)
+
 
 if __name__ == "__main__":
     unittest.main()
+

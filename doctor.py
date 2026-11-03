@@ -5,6 +5,7 @@ Verifies Python version, runtime modules, Termux/Android integration, storage
 permissions, audio playback utilities, network reachability, and audio synthesis.
 """
 
+import ctypes
 import json
 import logging
 import os
@@ -30,7 +31,7 @@ if not logger.handlers:
 
 class EnvironmentDoctor:
     """
-    Diagnostic suite for validating execution environment readiness.
+    Diagnostic suite for validating execution environment readiness across Windows Desktop and Termux.
     """
 
     def __init__(self) -> None:
@@ -46,7 +47,19 @@ class EnvironmentDoctor:
 
     def check_standard_modules(self) -> bool:
         """Verifies all required standard modules can be imported."""
-        modules = ["urllib.request", "json", "wave", "struct", "base64", "math", "time", "logging", "pathlib"]
+        modules = [
+            "urllib.request",
+            "json",
+            "wave",
+            "struct",
+            "base64",
+            "math",
+            "time",
+            "logging",
+            "pathlib",
+            "zipfile",
+            "xml.etree.ElementTree",
+        ]
         missing = []
         for mod in modules:
             try:
@@ -55,9 +68,31 @@ class EnvironmentDoctor:
                 missing.append(mod)
 
         passed = len(missing) == 0
-        msg = "All standard library modules available." if passed else f"Missing modules: {', '.join(missing)}"
+        msg = "All standard library modules (including .docx XML parser) available." if passed else f"Missing modules: {', '.join(missing)}"
         self.report["standard_modules"] = (passed, msg)
         return passed
+
+    def check_desktop_gui_dependencies(self) -> bool:
+        """Checks whether wxPython and optional python-docx are installed for the Desktop GUI."""
+        has_wx = False
+        wx_ver = "not installed"
+        try:
+            import wx  # type: ignore
+            has_wx = True
+            wx_ver = getattr(wx, "__version__", "installed")
+        except Exception:
+            has_wx = False
+
+        has_docx = False
+        try:
+            import docx  # type: ignore # noqa: F401
+            has_docx = True
+        except Exception:
+            has_docx = False
+
+        msg = f"wxPython: {wx_ver} | python-docx: {'installed' if has_docx else 'using stdlib XML fallback'}"
+        self.report["desktop_gui"] = (True, msg)
+        return has_wx
 
     def check_storage_permissions(self) -> bool:
         """Verifies write and atomic rename capabilities on current filesystem."""
@@ -67,11 +102,11 @@ class EnvironmentDoctor:
             test_file = test_dir / f"test_{os.getpid()}.tmp"
             test_file.write_text("ok", encoding="utf-8")
             dest_file = test_dir / f"test_{os.getpid()}.dat"
-            test_file.replace(dest_file)
+            os.replace(str(test_file), str(dest_file))
             dest_file.unlink()
             test_dir.rmdir()
             passed = True
-            msg = "Local directory write and atomic replace verified."
+            msg = "Local directory write and atomic os.replace verified."
         except Exception as e:
             passed = False
             msg = f"Storage write test failed: {str(e)}"
@@ -80,22 +115,29 @@ class EnvironmentDoctor:
         return passed
 
     def check_termux_environment(self) -> bool:
-        """Inspects Termux and Android environment flags."""
+        """Inspects Termux, Android, and Windows platform flags."""
         is_termux = "com.termux" in os.getenv("PREFIX", "") or "com.termux" in str(Path.home())
         termux_storage = Path.home() / "storage"
         has_storage_link = termux_storage.exists() and termux_storage.is_dir()
 
-        msg = f"Termux runtime: {is_termux} | Termux shared storage accessible: {has_storage_link}"
-        self.report["termux_env"] = (True, msg)
+        msg = (
+            f"Platform: {sys.platform} | Termux runtime: {is_termux} | "
+            f"Termux shared storage accessible: {has_storage_link}"
+        )
+        self.report["platform_env"] = (True, msg)
         return True
 
     def check_audio_playback_utilities(self) -> bool:
-        """Detects available audio playback CLI tools."""
+        """Detects Windows native winmm MCI or available CLI audio playback tools."""
+        found = []
+        if sys.platform == "win32" and hasattr(ctypes, "windll") and hasattr(ctypes.windll, "winmm"):
+            found.append("windows-winmm-mci")
+
         candidates = ["termux-media-player", "ffplay", "mpv", "play", "aplay"]
-        found = [cmd for cmd in candidates if shutil.which(cmd) is not None]
+        found.extend(cmd for cmd in candidates if shutil.which(cmd) is not None)
 
         passed = len(found) > 0
-        msg = f"Available audio players: {', '.join(found)}" if passed else "No audio player binary found (install termux-api or mpv)."
+        msg = f"Available audio backends: {', '.join(found)}" if passed else "No audio player backend found."
         self.report["audio_players"] = (passed, msg)
         return passed
 
@@ -103,7 +145,7 @@ class EnvironmentDoctor:
         """Tests network reachability to Google Generative Language API endpoint."""
         url = "https://generativelanguage.googleapis.com"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "GeminiAudiobookDoctor/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": "GeminiAudiobookDoctor/2.0"})
             with urllib.request.urlopen(req, timeout=5) as response:
                 status = response.status
                 passed = status in (200, 301, 302, 404)
@@ -119,10 +161,23 @@ class EnvironmentDoctor:
         return passed
 
     def check_api_key_configured(self) -> bool:
-        """Checks if GEMINI_API_KEY environment variable is configured."""
+        """Checks if GEMINI_API_KEY environment variable or desktop settings is configured."""
         key = os.getenv("GEMINI_API_KEY", "").strip()
-        passed = bool(key)
-        msg = "GEMINI_API_KEY environment variable is set." if passed else "GEMINI_API_KEY is not set (mock mode will be used)."
+        settings_path = Path.home() / ".gemini_audiobook_desktop" / "settings.json"
+        has_saved_keys = False
+        if settings_path.is_file():
+            try:
+                data = json.loads(settings_path.read_text(encoding="utf-8"))
+                has_saved_keys = bool(data.get("api_keys") or data.get("api_key"))
+            except Exception:
+                has_saved_keys = False
+
+        passed = bool(key or has_saved_keys)
+        msg = (
+            "API key configured (via environment or saved settings)."
+            if passed
+            else "GEMINI_API_KEY is not set (mock mode or GUI settings key will be used)."
+        )
         self.report["api_key_configured"] = (passed, msg)
         return passed
 
@@ -136,7 +191,7 @@ class EnvironmentDoctor:
 
             wave_marker = synthetic_wav[8:12]
             if wave_marker != b"WAVE":
-                self.report["audio_synthesis"] = (False, f"Invalid WAVE format marker: {wave_marker}")
+                self.report["audio_synthesis"] = (False, f"Invalid WAVE format marker: {wave_marker!r}")
                 return False
 
             # Verify fmt chunk sample rate
@@ -156,6 +211,7 @@ class EnvironmentDoctor:
         logger.info("Starting Gemini Audiobook TTS Environment Doctor...")
         self.check_python_version()
         self.check_standard_modules()
+        self.check_desktop_gui_dependencies()
         self.check_storage_permissions()
         self.check_termux_environment()
         self.check_audio_playback_utilities()
@@ -187,3 +243,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
