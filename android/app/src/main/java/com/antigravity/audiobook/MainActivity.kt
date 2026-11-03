@@ -16,6 +16,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
@@ -27,19 +28,23 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import java.util.concurrent.CancellationException
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import android.os.PowerManager
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.antigravity.audiobook.data.GeminiTtsClient
+import com.antigravity.audiobook.data.QuotaExceededException
 import com.antigravity.audiobook.domain.DialogueTurnAnnotator
 import com.antigravity.audiobook.domain.MultiSpeakerConfig
 import com.antigravity.audiobook.domain.VoiceProfile
@@ -75,6 +80,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         private const val KEY_CHARACTER_VOICE = "gemini_character_voice"
         private const val KEY_MODEL_ID = "gemini_model_id"
         private const val KEY_CUSTOM_VOICES_JSON = "custom_voices_json"
+        private const val KEY_CUSTOM_VOICE_INSTRUCTIONS = "custom_voice_instructions"
 
         private const val DEFAULT_NARRATOR_VOICE = "Charon"
         private const val DEFAULT_CHARACTER_VOICE = "Kore"
@@ -93,6 +99,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     // Tab 1: Library Views
     private lateinit var btnAddBook: Button
     private lateinit var btnPasteText: Button
+    private lateinit var cardResumeIncompleteBook: View
+    private lateinit var textResumeBookInfo: TextView
+    private lateinit var btnResumeBook: Button
+    private lateinit var btnDismissResumeBook: Button
     private lateinit var listViewBooks: ListView
     private lateinit var textEmptyBooks: TextView
     private lateinit var textNowPlayingTitle: TextView
@@ -114,6 +124,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     // Tab 3: Voice Studio Views
     private lateinit var btnSelectNarratorVoice: Button
     private lateinit var btnSelectVoiceStyle: Button
+    private lateinit var btnCustomVoiceInstructions: Button
     private lateinit var btnToggleMultiSpeaker: Button
     private lateinit var btnSelectCharacterVoice: Button
     private lateinit var btnMultiSpeakerHelp: Button
@@ -127,6 +138,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnEditApiKey: Button
     private lateinit var btnTestApiKey: Button
     private lateinit var btnSelectModel: Button
+    private lateinit var textStorageFolderInfo: TextView
+    private lateinit var btnStoragePermission: Button
     private lateinit var textAppVersion: TextView
     private lateinit var btnCheckAppUpdate: Button
 
@@ -135,6 +148,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private val customVoices = mutableListOf<VoiceProfile>()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private val booksList = mutableListOf<BookItem>()
     private lateinit var booksAdapter: BooksAdapter
@@ -207,6 +221,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         // Library Views
         btnAddBook = findViewById(R.id.btnAddBook)
         btnPasteText = findViewById(R.id.btnPasteText)
+        cardResumeIncompleteBook = findViewById(R.id.cardResumeIncompleteBook)
+        textResumeBookInfo = findViewById(R.id.textResumeBookInfo)
+        btnResumeBook = findViewById(R.id.btnResumeBook)
+        btnDismissResumeBook = findViewById(R.id.btnDismissResumeBook)
         listViewBooks = findViewById(R.id.listViewBooks)
         textEmptyBooks = findViewById(R.id.textEmptyBooks)
         textNowPlayingTitle = findViewById(R.id.textNowPlayingTitle)
@@ -228,6 +246,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         // Voice Studio Views
         btnSelectNarratorVoice = findViewById(R.id.btnSelectNarratorVoice)
         btnSelectVoiceStyle = findViewById(R.id.btnSelectVoiceStyle)
+        btnCustomVoiceInstructions = findViewById(R.id.btnCustomVoiceInstructions)
         btnToggleMultiSpeaker = findViewById(R.id.btnToggleMultiSpeaker)
         btnSelectCharacterVoice = findViewById(R.id.btnSelectCharacterVoice)
         btnMultiSpeakerHelp = findViewById(R.id.btnMultiSpeakerHelp)
@@ -241,6 +260,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnEditApiKey = findViewById(R.id.btnEditApiKey)
         btnTestApiKey = findViewById(R.id.btnTestApiKey)
         btnSelectModel = findViewById(R.id.btnSelectModel)
+        textStorageFolderInfo = findViewById(R.id.textStorageFolderInfo)
+        btnStoragePermission = findViewById(R.id.btnStoragePermission)
         textAppVersion = findViewById(R.id.textAppVersion)
         btnCheckAppUpdate = findViewById(R.id.btnCheckAppUpdate)
 
@@ -366,6 +387,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             showVoiceStylePicker()
         }
 
+        btnCustomVoiceInstructions.setOnClickListener {
+            showCustomVoiceInstructionsDialog()
+        }
+
         btnToggleMultiSpeaker.setOnClickListener {
             toggleMultiSpeaker()
         }
@@ -405,6 +430,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         btnSelectModel.setOnClickListener {
             showModelSelectionDialog()
+        }
+
+        btnStoragePermission.setOnClickListener {
+            requestOrCheckStoragePermission()
         }
 
         btnCheckAppUpdate.setOnClickListener {
@@ -528,6 +557,15 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val stylePreset = VoiceStylePreset.fromId(styleId)
         btnSelectVoiceStyle.text = "النمط: ${stylePreset.titleArabic}"
         btnSelectVoiceStyle.contentDescription = "نمط الإلقاء: ${stylePreset.titleArabic}"
+
+        val customInst = settingsPrefs.getString(KEY_CUSTOM_VOICE_INSTRUCTIONS, null)
+        if (!customInst.isNullOrBlank()) {
+            btnCustomVoiceInstructions.text = "التعليمات: مخصصة (انقر للتعديل)"
+            btnCustomVoiceInstructions.contentDescription = "التعليمات المخصصة للصوت: $customInst"
+        } else {
+            btnCustomVoiceInstructions.text = "التعليمات المخصصة للصوت: غير محددة"
+            btnCustomVoiceInstructions.contentDescription = "التعليمات المخصصة للصوت غير محددة، انقر للإضافة"
+        }
 
         val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
         btnToggleMultiSpeaker.text = if (isMultiSpeaker) "الحوار: مفعّل" else "الحوار: معطّل"
@@ -683,6 +721,42 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 updateStudioUI()
                 announceStatus("تم اختيار نمط الإلقاء: ${chosen.titleArabic}")
                 dialog.dismiss()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun showCustomVoiceInstructionsDialog() {
+        val currentInstructions = settingsPrefs.getString(KEY_CUSTOM_VOICE_INSTRUCTIONS, "") ?: ""
+        val input = EditText(this).apply {
+            hint = "اكتب توجيهات الأداء الصوتي (مثال: تحدث بهدوء ورزانة وبنبرة دافئة ووقورة ملائمة للكتب التاريخية)..."
+            setText(currentInstructions)
+            contentDescription = "حقل إدخال التعليمات المخصصة لأداء الصوت"
+            minLines = 3
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("التعليمات المخصصة للصوت")
+            .setView(input)
+            .setPositiveButton(R.string.action_save) { _, _ ->
+                val newInstructions = input.text.toString().trim()
+                if (newInstructions.isNotBlank()) {
+                    settingsPrefs.edit().putString(KEY_CUSTOM_VOICE_INSTRUCTIONS, newInstructions).apply()
+                    announceStatus("تم حفظ التعليمات المخصصة للصوت بنجاح")
+                    Toast.makeText(this, "تم حفظ التعليمات المخصصة", Toast.LENGTH_SHORT).show()
+                } else {
+                    settingsPrefs.edit().remove(KEY_CUSTOM_VOICE_INSTRUCTIONS).apply()
+                    announceStatus("تم مسح التعليمات المخصصة للصوت")
+                }
+                updateStudioUI()
+            }
+            .setNeutralButton("مسح") { _, _ ->
+                settingsPrefs.edit().remove(KEY_CUSTOM_VOICE_INSTRUCTIONS).apply()
+                updateStudioUI()
+                announceStatus("تم مسح التعليمات المخصصة للصوت")
+                Toast.makeText(this, "تم مسح التعليمات المخصصة", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -1160,11 +1234,67 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.1"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3.1"
         } catch (e: Exception) {
-            "1.2.1"
+            "1.3.1"
         }
         textAppVersion.text = "الإصدار: $currentVer"
+
+        val hasStorage = hasStoragePermission()
+        if (hasStorage) {
+            btnStoragePermission.text = "الوصول للملفات: مفعّل (الذاكرة الداخلية)"
+            btnStoragePermission.contentDescription = "إذن الوصول لجميع الملفات مفعّل، يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية"
+        } else {
+            btnStoragePermission.text = "الوصول للملفات: غير مفعّل (اضغط للتفعيل)"
+            btnStoragePermission.contentDescription = "إذن الوصول لجميع الملفات غير مفعّل، اضغط للانتقال للإعدادات والتفعيل للحفظ في الذاكرة الداخلية"
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateSettingsUI()
+    }
+
+    private fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requestOrCheckStoragePermission() {
+        if (hasStoragePermission()) {
+            announceStatus("إذن الوصول لجميع الملفات مفعّل بالفعل. يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية.")
+            Toast.makeText(this, "الإذن مفعّل بالفعل", Toast.LENGTH_SHORT).show()
+        } else {
+            showStoragePermissionDialog()
+        }
+    }
+
+    private fun showStoragePermissionDialog(onDismiss: () -> Unit = {}) {
+        AlertDialog.Builder(this)
+            .setTitle("إذن الوصول الكامل للملفات")
+            .setMessage("ليتمكن التطبيق من حفظ فصول وكتب الصوت مباشرة داخل مجلد «GeminiAudiobook» بالذاكرة الداخلية لجهازك، يرجى تفعيل خيار «الوصول إلى جميع الملفات» في شاشة الإعدادات التالية.")
+            .setPositiveButton("الانتقال للإعدادات والتفعيل") { _, _ ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        startActivity(intent)
+                    }
+                } else {
+                    requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 101)
+                }
+            }
+            .setNegativeButton("لاحقاً") { _, _ ->
+                onDismiss()
+            }
+            .show()
     }
 
     private fun showApiKeyEditDialog() {
@@ -1262,20 +1392,21 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
     private fun showDeleteConfirmation(book: BookItem) {
         val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
-        val isInProgress = totalChapters > book.chaptersCount
+        val status = book.manifest.optString("status", "")
+        val isInProgress = totalChapters > book.chaptersCount || status == "in_progress" || status == "paused"
 
         val options = if (isInProgress) {
             arrayOf(
                 "تشغيل الفصول المتاحة",
                 "استئناف تحويل باقي الفصول",
-                "تصدير الفصول المنجزة إلى التنزيلات (Downloads)",
+                "تصدير الفصول المنجزة إلى مجلد GeminiAudiobook",
                 "مشاركة الملفات الصوتية (Share)",
                 "حذف الكتاب"
             )
         } else {
             arrayOf(
                 "تشغيل الكتاب",
-                "تصدير الصوت إلى مجلد التنزيلات (Downloads)",
+                "تصدير الصوت إلى مجلد GeminiAudiobook",
                 "مشاركة الملفات الصوتية (Share)",
                 "حذف الكتاب"
             )
@@ -1306,9 +1437,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     }
 
     private fun exportBook(book: BookItem) {
-        announceStatus("جارِ تصدير فصول الكتاب إلى مجلد التنزيلات...")
+        announceStatus("جارِ تصدير فصول الكتاب إلى مجلد GeminiAudiobook بالذاكرة الداخلية...")
         lifecycleScope.launch(Dispatchers.IO) {
-            val (count, path) = AudioExporter.exportBookToDownloads(this@MainActivity, book)
+            val (count, path) = AudioExporter.exportBookToDedicatedFolder(this@MainActivity, book)
             withContext(Dispatchers.Main) {
                 if (count > 0) {
                     val msg = "تم تصدير $count فصول بنجاح إلى: $path"
@@ -1381,6 +1512,27 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
         booksAdapter.notifyDataSetChanged()
         textEmptyBooks.visibility = if (booksList.isEmpty()) View.VISIBLE else View.GONE
+
+        val incompleteBook = booksList.firstOrNull { book ->
+            val total = book.manifest.optInt("total_chapters", book.chaptersCount)
+            val st = book.manifest.optString("status", "")
+            (st == "in_progress" || st == "paused" || book.chaptersCount < total) && total > 0
+        }
+
+        if (incompleteBook != null) {
+            val total = incompleteBook.manifest.optInt("total_chapters", incompleteBook.chaptersCount)
+            cardResumeIncompleteBook.visibility = View.VISIBLE
+            textResumeBookInfo.text = "يوجد كتاب غير مكتمل: ${incompleteBook.title} (تم إنجاز ${incompleteBook.chaptersCount} من $total فصول)"
+            cardResumeIncompleteBook.contentDescription = "تنبيه: يوجد كتاب غير مكتمل، ${incompleteBook.title}، تم إنجاز ${incompleteBook.chaptersCount} من $total فصول. زر استئناف التحويل متاح."
+            btnResumeBook.setOnClickListener {
+                resumeIncompleteBook(incompleteBook)
+            }
+            btnDismissResumeBook.setOnClickListener {
+                cardResumeIncompleteBook.visibility = View.GONE
+            }
+        } else {
+            cardResumeIncompleteBook.visibility = View.GONE
+        }
     }
 
     private fun showPasteTextDialog() {
@@ -1571,7 +1723,53 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         }
     }
 
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock == null) {
+                val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                wakeLock = powerManager?.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "GeminiAudiobook:ConversionWakeLock"
+                )?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            wakeLock?.acquire(120 * 60 * 1000L) // 2 hours maximum safeguard
+            Log.i(TAG, "WakeLock acquired for audiobook conversion")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to acquire WakeLock: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.i(TAG, "WakeLock released")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to release WakeLock: ${e.message}")
+        }
+    }
+
+    private fun showQuotaExceededDialog(sourceFile: File, bookDir: File, bookTitle: String) {
+        AlertDialog.Builder(this)
+            .setTitle("حد الاستخدام (HTTP 429)")
+            .setMessage("تم تجاوز حد الطلبات المسموح به للدقيقة لنموذج Gemini.\n\nتم حفظ جميع الفصول والمقاطع السابقة ولن تضيع.\nيمكنك الانتظار دقيقة وإعادة المحاولة الآن، أو تعديل مفتاح API.")
+            .setPositiveButton("إعادة المحاولة الآن") { _, _ ->
+                announceStatus("إعادة محاولة تحويل «$bookTitle»...")
+                startBookProcessing(sourceFile, bookDir, bookTitle)
+            }
+            .setNeutralButton("تعديل مفتاح API") { _, _ ->
+                bottomNav.selectedItemId = R.id.tab_settings
+                showApiKeyEditDialog()
+            }
+            .setNegativeButton("لاحقاً", null)
+            .show()
+    }
+
     private fun startBookProcessing(sourceFile: File, bookDir: File, bookTitle: String) {
+        acquireWakeLock()
         lifecycleScope.launch {
             try {
                 val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
@@ -1604,33 +1802,49 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                     )
                 } else null
 
+                val customInstructions = settingsPrefs.getString(KEY_CUSTOM_VOICE_INSTRUCTIONS, null)
+
                 val engine = AudiobookEngine(
                     context = this@MainActivity,
                     outputDir = bookDir,
                     ttsClient = ttsClient,
                     voiceName = narratorVoice,
                     stylePreset = stylePreset,
-                    multiSpeakerConfig = multiConfig
+                    multiSpeakerConfig = multiConfig,
+                    customInstructions = customInstructions
                 )
 
                 announceStatus("جارِ تحويل فصول «$bookTitle» عبر الذكاء الاصطناعي (نمط: ${stylePreset.titleArabic})...")
 
                 withContext(Dispatchers.IO) {
-                    engine.processBook(persistentSource) { current, total, title ->
+                    engine.processBook(persistentSource, customTitle = bookTitle) { current, total, title ->
                         lifecycleScope.launch(Dispatchers.Main) {
                             announceStatus("تحويل الفصل $current من $total: $title")
                         }
                     }
                 }
 
-                announceStatus("اكتمل تجهيز الكتاب الصوتي بنجاح! اضغط عليه للاستماع.")
-                Toast.makeText(this@MainActivity, "تم تجهيز الكتاب بنجاح", Toast.LENGTH_SHORT).show()
+                val folderDisplay = if (hasStoragePermission()) {
+                    "/sdcard/GeminiAudiobook/$bookTitle"
+                } else {
+                    "Music/GeminiAudiobook/$bookTitle"
+                }
+                announceStatus("اكتمل تجهيز الكتاب الصوتي بنجاح! تم الحفظ في مجلد: $folderDisplay")
+                Toast.makeText(this@MainActivity, "تم حفظ الكتاب في: $folderDisplay", Toast.LENGTH_LONG).show()
                 refreshBooksList()
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing book: ${e.message}", e)
                 refreshBooksList()
-                announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
-                Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                val isQuota = e is QuotaExceededException || e.message?.contains("429") == true || e.message?.contains("Rate limit") == true
+                if (isQuota) {
+                    announceStatus("تم الوصول لحد الطلبات (429). الفصول المنجزة محفوظة. يمكنك إعادة المحاولة الآن من النافذة الظاهرة.")
+                    showQuotaExceededDialog(sourceFile, bookDir, bookTitle)
+                } else {
+                    announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
+                    Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                releaseWakeLock()
             }
         }
     }
@@ -1773,6 +1987,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
     }
 
     override fun onDestroy() {
+        releaseWakeLock()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         super.onDestroy()
     }
@@ -1790,41 +2005,69 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.2.1"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3.0"
                 } catch (e: Exception) {
-                    "1.2.1"
+                    "1.3.0"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {
-                    val url = "https://api.github.com/repos/ahanafy41/gemini-audiobook-tts/releases/latest"
                     val client = OkHttpClient.Builder().build()
-                    val request = Request.Builder()
-                        .url(url)
+                    val apiUrl = "https://api.github.com/repos/ahanafy41/gemini-audiobook-tts/releases/latest"
+                    val apiRequest = Request.Builder()
+                        .url(apiUrl)
                         .header("User-Agent", "GeminiAudiobookApp/$currentVersionName")
                         .header("Accept", "application/vnd.github.v3+json")
                         .build()
 
-                    client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            throw IllegalStateException("استجابة الخادم (${response.code})")
-                        }
-                        val body = response.body?.string() ?: ""
-                        val json = JSONObject(body)
-                        val tagName = json.optString("tag_name", "").removePrefix("v")
-                        val bodyText = json.optString("body", "تحديث جديد يتضمن تحسينات للأداء وإصلاحات.")
-                        val assets = json.optJSONArray("assets")
-                        var apkUrl = ""
-                        if (assets != null) {
-                            for (i in 0 until assets.length()) {
-                                val asset = assets.getJSONObject(i)
-                                val name = asset.optString("name", "")
-                                if (name.endsWith(".apk", ignoreCase = true)) {
-                                    apkUrl = asset.optString("browser_download_url", "")
-                                    break
+                    try {
+                        client.newCall(apiRequest).execute().use { response ->
+                            if (response.isSuccessful) {
+                                val body = response.body?.string() ?: ""
+                                val json = JSONObject(body)
+                                val tagName = json.optString("tag_name", "").removePrefix("v")
+                                val bodyText = json.optString("body", "تحديث جديد يتضمن تحسينات للأداء وإصلاحات.")
+                                val assets = json.optJSONArray("assets")
+                                var apkUrl = ""
+                                if (assets != null) {
+                                    for (i in 0 until assets.length()) {
+                                        val asset = assets.getJSONObject(i)
+                                        val name = asset.optString("name", "")
+                                        if (name.endsWith(".apk", ignoreCase = true)) {
+                                            apkUrl = asset.optString("browser_download_url", "")
+                                            break
+                                        }
+                                    }
+                                }
+                                if (tagName.isNotBlank() && apkUrl.isNotBlank()) {
+                                    return@withContext Triple(tagName, bodyText, apkUrl)
                                 }
                             }
                         }
-                        Triple(tagName, bodyText, apkUrl)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "GitHub API update check failed, attempting web fallback: ${e.message}")
+                    }
+
+                    // Fallback to web redirect (bypasses GitHub REST API 403 IP rate-limit completely)
+                    val noRedirectClient = OkHttpClient.Builder()
+                        .followRedirects(false)
+                        .followSslRedirects(false)
+                        .build()
+                    val webRequest = Request.Builder()
+                        .url("https://github.com/ahanafy41/gemini-audiobook-tts/releases/latest")
+                        .header("User-Agent", "Mozilla/5.0 (Android; Mobile)")
+                        .build()
+
+                    noRedirectClient.newCall(webRequest).execute().use { response ->
+                        val location = response.header("Location") ?: ""
+                        if (location.contains("/releases/tag/")) {
+                            val rawTag = location.substringAfterLast("/tag/").trim()
+                            val cleanTag = rawTag.removePrefix("v")
+                            val apkUrl = "https://github.com/ahanafy41/gemini-audiobook-tts/releases/download/$rawTag/app-debug.apk"
+                            val notes = "تحديث جديد يتضمن تحسينات للأداء وإصلاحات لمكتبة جيميني."
+                            Triple(cleanTag, notes, apkUrl)
+                        } else {
+                            throw IllegalStateException("تعذر جلب التحديث من الخادم (${response.code})")
+                        }
                     }
                 }
 
@@ -1874,12 +2117,59 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
     }
 
     private fun downloadAndInstallUpdate(downloadUrl: String, version: String) {
-        announceStatus("جارِ تحميل التحديث v$version... يرجى الانتظار")
-        Toast.makeText(this, "جارِ تحميل ملف التحديث في الخلفية...", Toast.LENGTH_SHORT).show()
+        val progressLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (20 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+
+        val textProgressInfo = TextView(this).apply {
+            text = "جارِ بدء التحميل..."
+            textSize = 15f
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_high_contrast))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = (12 * resources.displayMetrics.density).toInt()
+            }
+        }
+
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = false
+            max = 100
+            progress = 0
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (20 * resources.displayMetrics.density).toInt()
+            )
+        }
+
+        progressLayout.addView(textProgressInfo)
+        progressLayout.addView(progressBar)
+
+        var isCancelled = false
+        var callRef: okhttp3.Call? = null
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("جارِ تحميل التحديث v$version")
+            .setView(progressLayout)
+            .setCancelable(false)
+            .setNegativeButton("إلغاء التحميل") { _, _ ->
+                isCancelled = true
+                callRef?.cancel()
+                announceStatus("تم إلغاء تحميل التحديث")
+            }
+            .create()
+
+        dialog.show()
+        announceStatus("بدأ تحميل التحديث v$version... يرجى الانتظار")
 
         lifecycleScope.launch {
             try {
                 val apkFile = File(cacheDir, "GeminiAudiobook_update.apk")
+                var lastAnnouncedPercent = 0
+
                 withContext(Dispatchers.IO) {
                     val client = OkHttpClient.Builder().build()
                     val req = Request.Builder()
@@ -1887,26 +2177,80 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                         .header("User-Agent", "GeminiAudiobookUpdater")
                         .build()
 
-                    client.newCall(req).execute().use { resp ->
+                    val call = client.newCall(req)
+                    callRef = call
+                    call.execute().use { resp ->
                         if (!resp.isSuccessful) throw IllegalStateException("فشل التحميل (${resp.code})")
                         val body = resp.body ?: throw IllegalStateException("ملف التحديث فارغ")
+                        val totalBytes = body.contentLength()
                         val tempFile = File(cacheDir, "GeminiAudiobook_update.tmp")
+
+                        var downloadedBytes = 0L
+                        val buffer = ByteArray(8192)
+
                         body.byteStream().use { input ->
                             FileOutputStream(tempFile).use { output ->
-                                input.copyTo(output)
+                                while (true) {
+                                    if (isCancelled) {
+                                        tempFile.delete()
+                                        throw CancellationException("تم إلغاء التحميل")
+                                    }
+                                    val read = input.read(buffer)
+                                    if (read == -1) break
+                                    output.write(buffer, 0, read)
+                                    downloadedBytes += read
+
+                                    if (totalBytes > 0) {
+                                        val percent = ((downloadedBytes * 100) / totalBytes).toInt()
+                                        val downloadedMB = downloadedBytes / (1024.0 * 1024.0)
+                                        val totalMB = totalBytes / (1024.0 * 1024.0)
+
+                                        withContext(Dispatchers.Main) {
+                                            progressBar.progress = percent
+                                            textProgressInfo.text = String.format(
+                                                java.util.Locale.US,
+                                                "تم تحميل %.1f من %.1f ميجابايت (%d%%)",
+                                                downloadedMB,
+                                                totalMB,
+                                                percent
+                                            )
+                                        }
+
+                                        // Announce every 25% for screen readers (TalkBack / Jieshuo)
+                                        if (percent >= lastAnnouncedPercent + 25 && percent < 100) {
+                                            lastAnnouncedPercent = (percent / 25) * 25
+                                            withContext(Dispatchers.Main) {
+                                                announceStatus("اكتمال التحميل: $lastAnnouncedPercent%")
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
+
                         if (apkFile.exists()) apkFile.delete()
                         tempFile.renameTo(apkFile)
                     }
                 }
 
-                announceStatus("اكتمل تحميل التحديث. جارِ فتح شاشة التثبيت...")
-                installApkFile(apkFile)
+                if (!isCancelled) {
+                    withContext(Dispatchers.Main) {
+                        dialog.dismiss()
+                        announceStatus("اكتمل تحميل التحديث 100%. جارِ فتح شاشة التثبيت...")
+                        installApkFile(apkFile)
+                    }
+                }
+            } catch (e: CancellationException) {
+                withContext(Dispatchers.Main) {
+                    dialog.dismiss()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Download update failed: ${e.message}")
-                announceStatus("فشل تحميل التحديث: ${e.localizedMessage ?: e.message}")
-                Toast.makeText(this@MainActivity, "خطأ في التحميل: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) {
+                    dialog.dismiss()
+                    announceStatus("فشل تحميل التحديث: ${e.localizedMessage ?: e.message}")
+                    Toast.makeText(this@MainActivity, "خطأ في التحميل: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -1964,17 +2308,18 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
 
             val totalChapters = book.manifest.optInt("total_chapters", book.chaptersCount)
             val status = book.manifest.optString("status", if (book.chaptersCount >= totalChapters) "completed" else "in_progress")
+            val isIncomplete = (status == "in_progress" || status == "paused" || book.chaptersCount < totalChapters) && totalChapters > 0
 
             val textTitle = view.findViewById<TextView>(R.id.textBookTitle)
             val textSubtitle = view.findViewById<TextView>(R.id.textBookSubtitle)
 
             textTitle.text = book.title
-            if (status == "in_progress" && totalChapters > book.chaptersCount) {
-                textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (قيد الإكمال)"
+            if (isIncomplete) {
+                textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (غير مكتمل)"
                 if (book.chaptersCount == 0) {
-                    view.contentDescription = "${book.title}، قيد الإكمال، 0 فصول جاهزة من أصل $totalChapters. اضغط للاستئناف، أو اضغط مطولاً للخيارات"
+                    view.contentDescription = "${book.title}، غير مكتمل، 0 فصول جاهزة من أصل $totalChapters. اضغط للاستئناف، أو اضغط مطولاً للخيارات"
                 } else {
-                    view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (قيد الإكمال). اضغط للتشغيل، أو اضغط مطولاً للخيارات والاستئناف"
+                    view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (غير مكتمل). اضغط للاستئناف أو التشغيل، أو اضغط مطولاً للخيارات"
                 }
             } else {
                 textSubtitle.text = "${book.chaptersCount} فصل (مكتمل)"
@@ -1982,8 +2327,22 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
             }
 
             view.setOnClickListener {
-                if (status == "in_progress" && book.chaptersCount == 0) {
-                    resumeIncompleteBook(book)
+                if (isIncomplete) {
+                    if (book.chaptersCount == 0) {
+                        resumeIncompleteBook(book)
+                    } else {
+                        AlertDialog.Builder(context)
+                            .setTitle(book.title)
+                            .setMessage("هذا الكتاب غير مكتمل (${book.chaptersCount} من أصل $totalChapters فصول جاهزة).\nماذا تود أن تفعل؟")
+                            .setPositiveButton("استئناف التحويل") { _, _ ->
+                                resumeIncompleteBook(book)
+                            }
+                            .setNeutralButton("تشغيل المنجز") { _, _ ->
+                                playBook(book, chapterIndex = 1)
+                            }
+                            .setNegativeButton(R.string.action_cancel, null)
+                            .show()
+                    }
                 } else {
                     playBook(book, chapterIndex = 1)
                 }

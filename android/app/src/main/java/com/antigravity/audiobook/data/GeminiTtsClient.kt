@@ -27,6 +27,12 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.sin
 
 /**
+ * Exception thrown when Gemini API quota / rate limit (HTTP 429) is reached.
+ * Allows the caller to pause gracefully and give manual retry control to the user.
+ */
+class QuotaExceededException(message: String) : Exception(message)
+
+/**
  * Gemini 3.8 Flash TTS Client for Android.
  * Communicates with Google's Gemini TTS endpoint using OkHttp,
  * supports style presets, multi-speaker dialogue, and custom Voice Design IDs.
@@ -92,6 +98,82 @@ class GeminiTtsClient(
 
             return createWavHeader(pcmBuffer.array(), sampleRate = sampleRate)
         }
+
+        data class ParsedWavResult(
+            val pcm: ByteArray,
+            val sampleRate: Int = 24000,
+            val channels: Short = 1,
+            val bitsPerSample: Short = 16
+        ) {
+            override fun equals(other: Any?): Boolean {
+                if (this === other) return true
+                if (javaClass != other?.javaClass) return false
+                other as ParsedWavResult
+                return pcm.contentEquals(other.pcm) && sampleRate == other.sampleRate &&
+                        channels == other.channels && bitsPerSample == other.bitsPerSample
+            }
+
+            override fun hashCode(): Int {
+                var result = pcm.contentHashCode()
+                result = 31 * result + sampleRate
+                result = 31 * result + channels
+                result = 31 * result + bitsPerSample
+                return result
+            }
+        }
+
+        fun extractPcmData(bytes: ByteArray): ParsedWavResult? {
+            if (bytes.size < 12) return null
+            if (bytes[0] != 'R'.code.toByte() || bytes[1] != 'I'.code.toByte() ||
+                bytes[2] != 'F'.code.toByte() || bytes[3] != 'F'.code.toByte()) {
+                return null
+            }
+            if (bytes[8] != 'W'.code.toByte() || bytes[9] != 'A'.code.toByte() ||
+                bytes[10] != 'V'.code.toByte() || bytes[11] != 'E'.code.toByte()) {
+                return null
+            }
+
+            var sampleRate = 24000
+            var channels: Short = 1
+            var bitsPerSample: Short = 16
+            var pcmBytes: ByteArray? = null
+
+            var offset = 12
+            val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+
+            while (offset + 8 <= bytes.size) {
+                val chunkId = String(bytes, offset, 4, Charsets.US_ASCII)
+                val chunkSize = buffer.getInt(offset + 4).toLong() and 0xFFFFFFFFL
+                val dataOffset = offset + 8
+
+                if (chunkId == "fmt ") {
+                    if (dataOffset + 14 <= bytes.size) {
+                        channels = buffer.getShort(dataOffset + 2)
+                        sampleRate = buffer.getInt(dataOffset + 4)
+                        if (dataOffset + 16 <= bytes.size) {
+                            bitsPerSample = buffer.getShort(dataOffset + 14)
+                        }
+                    }
+                } else if (chunkId == "data") {
+                    val actualLength = if (dataOffset + chunkSize <= bytes.size) {
+                        chunkSize.toInt()
+                    } else {
+                        (bytes.size - dataOffset).coerceAtLeast(0)
+                    }
+                    pcmBytes = bytes.copyOfRange(dataOffset, dataOffset + actualLength)
+                    break
+                }
+
+                val paddedSize = chunkSize + (chunkSize % 2)
+                val nextOffset = dataOffset + paddedSize
+                if (nextOffset <= offset || nextOffset > Int.MAX_VALUE) break
+                offset = nextOffset.toInt()
+            }
+
+            return if (pcmBytes != null) {
+                ParsedWavResult(pcmBytes, sampleRate, channels, bitsPerSample)
+            } else null
+        }
     }
 
     private class ResilientDns : Dns {
@@ -130,7 +212,8 @@ class GeminiTtsClient(
         text: String,
         voiceName: String = "Charon",
         stylePreset: VoiceStylePreset = VoiceStylePreset.NATURAL,
-        multiSpeakerConfig: MultiSpeakerConfig? = null
+        multiSpeakerConfig: MultiSpeakerConfig? = null,
+        customInstructions: String? = null
     ): ByteArray = withContext(Dispatchers.IO) {
         val cleanText = text.trim()
         if (cleanText.isEmpty()) {
@@ -150,22 +233,31 @@ class GeminiTtsClient(
             })
         }
 
+        val styleDescription = buildList {
+            if (stylePreset != VoiceStylePreset.NATURAL) {
+                add(stylePreset.directorPrompt.removePrefix("[Style: ").removeSuffix("]"))
+            }
+            if (!customInstructions.isNullOrBlank()) {
+                add(customInstructions.trim())
+            }
+        }.joinToString(", ")
+
         if (multiSpeakerConfig != null && multiSpeakerConfig.isEnabled) {
             val annotator = DialogueTurnAnnotator("Narrator", "Character")
             val turns = annotator.annotateText(cleanText)
             val partsArray = JSONArray()
             for (index in turns.indices) {
                 val turn = turns[index]
-                val turnText = if (index == 0 && stylePreset != VoiceStylePreset.NATURAL) {
-                    "${stylePreset.directorPrompt}\n${turn.text}"
-                } else {
-                    turn.text
+                val turnText = turn.text
+                val speechMeta = JSONObject().apply {
+                    put("speaker", turn.speaker)
+                    if (index == 0 && styleDescription.isNotEmpty()) {
+                        put("style", styleDescription)
+                    }
                 }
                 partsArray.put(JSONObject().apply {
                     put("text", turnText)
-                    put("speechMetadata", JSONObject().apply {
-                        put("speaker", turn.speaker)
-                    })
+                    put("speechMetadata", speechMeta)
                 })
             }
             payload.put("contents", JSONArray().apply {
@@ -175,14 +267,14 @@ class GeminiTtsClient(
             })
             generationConfig.put("speechConfig", multiSpeakerConfig.toSpeechConfigJson())
         } else {
-            val promptText = if (stylePreset != VoiceStylePreset.NATURAL) {
-                "${stylePreset.directorPrompt}\n$cleanText"
-            } else {
-                cleanText
-            }
             val partsArray = JSONArray().apply {
                 put(JSONObject().apply {
-                    put("text", promptText)
+                    put("text", cleanText)
+                    if (styleDescription.isNotEmpty()) {
+                        put("speechMetadata", JSONObject().apply {
+                            put("style", styleDescription)
+                        })
+                    }
                 })
             }
             payload.put("contents", JSONArray().apply {
@@ -215,75 +307,50 @@ class GeminiTtsClient(
             .header("User-Agent", "GeminiAudiobookAndroid/1.0")
             .build()
 
-        var attempt = 0
-        val maxAttempts = 5
-        while (attempt < maxAttempts) {
-            attempt++
-            var shouldRetry = false
-            var retryDelayMs = 15000L
-            var audioResult: ByteArray? = null
-
-            try {
-                httpClient.newCall(request).execute().use { response ->
-                    if (response.code == 429) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.w(TAG, "Gemini HTTP 429 Rate Limit (attempt $attempt/$maxAttempts): $errorBody")
-                        if (attempt < maxAttempts) {
-                            shouldRetry = true
-                            retryDelayMs = 20000L
-                        } else {
-                            throw IllegalStateException("API error 429: تم تجاوز حد الطلبات للدقيقة (Rate limit). يرجى الانتظار والمحاولة مجدداً.")
-                        }
-                    } else if (response.code in 500..599) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.w(TAG, "Gemini HTTP Server Error ${response.code} (attempt $attempt/$maxAttempts): $errorBody")
-                        if (attempt < maxAttempts) {
-                            shouldRetry = true
-                            retryDelayMs = 15000L
-                        } else {
-                            throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
-                        }
-                    } else if (!response.isSuccessful) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
-                        throw IllegalStateException("API error ${response.code}: $errorBody")
-                    } else {
-                        val responseStr = response.body?.string() ?: ""
-                        val json = JSONObject(responseStr)
-                        val audioBytes = extractAudioBytes(json)
-                        audioResult = if (audioBytes.size >= 4 &&
-                            audioBytes[0] == 'R'.code.toByte() &&
-                            audioBytes[1] == 'I'.code.toByte() &&
-                            audioBytes[2] == 'F'.code.toByte() &&
-                            audioBytes[3] == 'F'.code.toByte()
-                        ) {
-                            audioBytes
-                        } else {
-                            createWavHeader(audioBytes, sampleRate = 24000)
-                        }
-                    }
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                if (response.code == 429) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.w(TAG, "Gemini HTTP 429 Rate Limit: $errorBody")
+                    throw QuotaExceededException("تم تجاوز حد الطلبات للدقيقة (Rate limit 429). يرجى الانتظار والمحاولة مجدداً.")
+                } else if (response.code in 500..599) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
+                    throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
+                } else if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: ""
+                    Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                    throw IllegalStateException("API error ${response.code}: $errorBody")
                 }
-            } catch (ioe: IOException) {
-                Log.w(TAG, "Network or DNS connection error on attempt $attempt/$maxAttempts: ${ioe.message}")
-                if (attempt < maxAttempts) {
-                    shouldRetry = true
-                    retryDelayMs = (8000L * attempt).coerceAtMost(30000L)
+
+                val responseStr = response.body?.string() ?: ""
+                val json = JSONObject(responseStr)
+                val rawAudio = extractAudioBytes(json)
+                val parsed = extractPcmData(rawAudio)
+                return@withContext if (parsed != null) {
+                    createWavHeader(
+                        parsed.pcm,
+                        sampleRate = parsed.sampleRate,
+                        channels = parsed.channels,
+                        bitsPerSample = parsed.bitsPerSample
+                    )
+                } else if (rawAudio.size >= 4 &&
+                    rawAudio[0] == 'R'.code.toByte() &&
+                    rawAudio[1] == 'I'.code.toByte() &&
+                    rawAudio[2] == 'F'.code.toByte() &&
+                    rawAudio[3] == 'F'.code.toByte()
+                ) {
+                    rawAudio
                 } else {
-                    throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت أو الـ DNS بعد $maxAttempts محاولات: ${ioe.localizedMessage ?: ioe.message}")
+                    createWavHeader(rawAudio, sampleRate = 24000)
                 }
             }
-
-            if (audioResult != null) {
-                return@withContext audioResult!!
-            }
-
-            if (shouldRetry) {
-                Log.i(TAG, "Waiting ${retryDelayMs / 1000} seconds before retry attempt $attempt/$maxAttempts...")
-                delay(retryDelayMs)
-            }
+        } catch (qee: QuotaExceededException) {
+            throw qee
+        } catch (ioe: IOException) {
+            Log.w(TAG, "Network connection error: ${ioe.message}")
+            throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت: ${ioe.localizedMessage ?: ioe.message}")
         }
-
-        throw IllegalStateException("فشل توليد الصوت بعد $maxAttempts محاولات.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {
@@ -293,14 +360,19 @@ class GeminiTtsClient(
         if (json.has("audio")) {
             return Base64.decode(json.getString("audio"), Base64.DEFAULT)
         }
+        if (json.has("output")) {
+            return Base64.decode(json.getString("output"), Base64.DEFAULT)
+        }
+
+        // 1. Scan across all candidates and all parts for inline audio data
         if (json.has("candidates")) {
             val candidates = json.getJSONArray("candidates")
-            if (candidates.length() > 0) {
-                val candidate = candidates.getJSONObject(0)
+            for (c in 0 until candidates.length()) {
+                val candidate = candidates.getJSONObject(c)
                 val content = candidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val part = parts.getJSONObject(0)
+                val parts = content?.optJSONArray("parts") ?: continue
+                for (p in 0 until parts.length()) {
+                    val part = parts.getJSONObject(p)
                     val inlineData = part.optJSONObject("inlineData")
                     if (inlineData != null && inlineData.has("data")) {
                         return Base64.decode(inlineData.getString("data"), Base64.DEFAULT)
@@ -312,11 +384,45 @@ class GeminiTtsClient(
                 }
             }
         }
-        if (json.has("output")) {
-            return Base64.decode(json.getString("output"), Base64.DEFAULT)
+
+        // 2. If no audio data found, diagnose the exact cause from response JSON
+        val promptFeedback = json.optJSONObject("promptFeedback")
+        val blockReason = promptFeedback?.optString("blockReason", "") ?: ""
+        if (blockReason.isNotBlank()) {
+            throw IllegalStateException("تم حظر المقطع من خادم جوجل (السبب: $blockReason).")
         }
 
-        throw IllegalArgumentException("Audio data not found in response JSON.")
+        if (json.has("candidates")) {
+            val candidates = json.getJSONArray("candidates")
+            if (candidates.length() > 0) {
+                val candidate = candidates.getJSONObject(0)
+                val finishReason = candidate.optString("finishReason", "")
+                if (finishReason.isNotBlank() && finishReason != "STOP") {
+                    when (finishReason) {
+                        "SAFETY" -> throw IllegalStateException("تم حظر المقطع بواسطة فلاتر الأمان لـ Gemini (finishReason: SAFETY).")
+                        "MAX_TOKENS" -> throw IllegalStateException("المقطع تجاوز حد الحروف المسموح بتوليدها صوتياً (finishReason: MAX_TOKENS).")
+                        "RECITATION" -> throw IllegalStateException("تم إيقاف المقطع بسبب حقوق النشر أو الاقتباس (finishReason: RECITATION).")
+                        else -> throw IllegalStateException("توقف توليد الصوت من الخادم (السبب: $finishReason).")
+                    }
+                }
+
+                val content = candidate.optJSONObject("content")
+                val parts = content?.optJSONArray("parts")
+                if (parts != null && parts.length() > 0) {
+                    val textList = mutableListOf<String>()
+                    for (p in 0 until parts.length()) {
+                        val t = parts.getJSONObject(p).optString("text", "")
+                        if (t.isNotBlank()) textList.add(t)
+                    }
+                    if (textList.isNotEmpty()) {
+                        val textSample = textList.joinToString(" ").take(100)
+                        throw IllegalStateException("استجاب النموذج بنص بدلاً من الصوت: \"$textSample\"")
+                    }
+                }
+            }
+        }
+
+        throw IllegalStateException("لم يُرجع خادم جوجل بيانات صوتية صالحة في الاستجابة.")
     }
 
     suspend fun synthesize(

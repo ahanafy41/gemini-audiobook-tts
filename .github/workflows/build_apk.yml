@@ -56,16 +56,18 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
           files: android/app/build/outputs/apk/debug/*.apk
-          tag_name: "v1.2.1"
-          name: "Gemini Audiobook TTS v1.2.1 (APK)"
+          tag_name: "v1.4.4"
+          name: "Gemini Audiobook TTS v1.4.4 (APK)"
           body: |
-            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.2.1
+            ### 📱 تطبيق Gemini Audiobook TTS - التحديث v1.4.4
 
-            - **إصلاح استنساخ الأصوات الحقيقية (Fix Voice Replication 400 Error)**:
-              - تصحيح اسم معلمة الصوت المرجعي في حمولة طلب Google Gemini API إلى `source_audio` بدلاً من `reference_audio`.
-              - إضافة ترويسة نوع الوسائط `mime_type: audio/wav` لملف الصوت وملف إقرار الموافقة طبقاً للمواصفات الرسمية.
-              - تحسين معالجة وإظهار نصوص الأخطاء الواردة من خادم Google بشكل واضح ودقيق.
-            - **التوقيع الدائم الموحد والتحديث التلقائي**:
-              - الحزمة موقعة بالمفتاح الدائم الموحد لضمان التحديث المباشر السلس.
+            - **إصلاح خطأ 400 (Developer instruction is not enabled for this model)**:
+              - إزالة تعليمات المطور (Developer instruction) غير المدعومة في نموذج التوليد الصوتي لـ Gemini TTS ليعمل التوليد بسلاسة وبدون أي أخطاء.
+            - **ضبط حدود النصوص إلى 8000 حرف (8000 Characters Safe Chunking)**:
+              - ضبط سقف تقطيع الفصول إلى 8000 حرف بدقة وفق رغبة المستخدم لضمان استقرار التحويل.
+            - **إصلاح خطأ 403 في فحص التحديثات (Fix 403 Update Check Error)**:
+              - إضافة نظام استرجاع مباشر (Web Fallback) لتجاوز قيود GitHub API والتحقق من التحديثات بنجاح دائم.
+            - **فحص شامل لكافة أجزاء الاستجابة (Multi-Part Scanning)**:
+              - استخراج الصوت بدقة حتى لو تم إرجاعه عبر أجزاء متعددة في الرد.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

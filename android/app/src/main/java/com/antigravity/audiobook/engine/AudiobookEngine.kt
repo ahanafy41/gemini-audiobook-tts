@@ -32,7 +32,8 @@ class AudiobookEngine(
     private val ttsClient: GeminiTtsClient,
     private val voiceName: String = "Charon",
     private val stylePreset: VoiceStylePreset = VoiceStylePreset.NATURAL,
-    private val multiSpeakerConfig: MultiSpeakerConfig? = null
+    private val multiSpeakerConfig: MultiSpeakerConfig? = null,
+    private val customInstructions: String? = null
 ) {
 
     companion object {
@@ -40,7 +41,7 @@ class AudiobookEngine(
     }
 
     private val bookParser = BookParser()
-    private val chunker = SmartTextChunker(7500)
+    private val chunker = SmartTextChunker(8000)
     private val progressFile = File(outputDir, "progress.json")
     private val manifestFile = File(outputDir, "book_manifest.json")
 
@@ -65,11 +66,31 @@ class AudiobookEngine(
         temp.renameTo(progressFile)
     }
 
+    private fun saveBookSettings() {
+        try {
+            val settings = JSONObject().apply {
+                put("voice_name", voiceName)
+                put("style_preset", stylePreset.id)
+                if (!customInstructions.isNullOrBlank()) {
+                    put("custom_instructions", customInstructions)
+                }
+                if (multiSpeakerConfig != null) {
+                    put("multi_speaker", multiSpeakerConfig.toSpeechConfigJson())
+                }
+            }
+            File(outputDir, "book_settings.json").writeText(settings.toString(2))
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save book_settings.json: ${e.message}")
+        }
+    }
+
     suspend fun processBook(
         bookFile: File,
+        customTitle: String? = null,
         onProgressUpdate: (currentChapter: Int, totalChapters: Int, chapterTitle: String) -> Unit = { _, _, _ -> }
     ): JSONObject = withContext(Dispatchers.IO) {
-        val parsedBook: ParsedBook = bookParser.parseFile(bookFile)
+        saveBookSettings()
+        val parsedBook: ParsedBook = bookParser.parseFile(bookFile, customTitle)
         val progress = loadProgress()
         val completedChapters = progress.optJSONObject("completed_chapters") ?: JSONObject()
 
@@ -77,6 +98,18 @@ class AudiobookEngine(
         val rawChunksDir = File(outputDir, "raw_chunks").apply { mkdirs() }
 
         val chaptersArray = JSONArray()
+
+        // Initialize manifest if not existing
+        if (!manifestFile.exists() || manifestFile.length() == 0L) {
+            val initialManifest = JSONObject().apply {
+                put("title", parsedBook.title)
+                put("chapters_count", completedChapters.length())
+                put("total_chapters", parsedBook.chapters.size)
+                put("chapters", JSONArray())
+                put("status", "in_progress")
+            }
+            saveManifest(initialManifest)
+        }
 
         for (i in parsedBook.chapters.indices) {
             val chapter = parsedBook.chapters[i]
@@ -111,7 +144,8 @@ class AudiobookEngine(
                             text = chunkText,
                             voiceName = voiceName,
                             stylePreset = stylePreset,
-                            multiSpeakerConfig = multiSpeakerConfig
+                            multiSpeakerConfig = multiSpeakerConfig,
+                            customInstructions = customInstructions
                         )
                         if (audioData.size > 1000) {
                             ttsClient.saveAudioAtomically(chunkFile, audioData)
@@ -122,15 +156,16 @@ class AudiobookEngine(
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Gemini AI synthesis failed for chunk ${cIdx + 1}: ${e.message}")
+                        markManifestPaused(parsedBook.title, parsedBook.chapters.size, chaptersArray)
                         throw e
                     }
                 }
                 chunkFiles.add(chunkFile)
 
-                // Protect RPM quota: if network synthesis occurred and more chunks remain, apply 10s pacing delay
+                // 5s pacing delay between network synthesis requests to maintain healthy RPM quota
                 if (synthesizedNetwork && (cIdx < textChunks.size - 1 || i < parsedBook.chapters.size - 1)) {
-                    Log.i(TAG, "Pacing delay (10s) between Gemini TTS requests to maintain healthy RPM quota...")
-                    delay(10000L)
+                    Log.i(TAG, "Pacing delay (5s) between Gemini TTS requests to maintain healthy RPM quota...")
+                    delay(5000L)
                 }
             }
 
@@ -139,7 +174,7 @@ class AudiobookEngine(
             val durationSec = durationMs / 1000
 
             try {
-                AudioExporter.exportChapterToDownloads(
+                AudioExporter.exportChapterToDedicatedFolder(
                     context = context,
                     chapterWav = chapterWav,
                     bookTitle = parsedBook.title,
@@ -147,7 +182,7 @@ class AudiobookEngine(
                     chapterTitle = chapter.chapterTitle
                 )
             } catch (e: Exception) {
-                Log.w(TAG, "Background export to Downloads skipped: ${e.message}")
+                Log.w(TAG, "Background export to GeminiAudiobook skipped: ${e.message}")
             }
 
             val chapterObj = JSONObject().apply {
@@ -177,12 +212,40 @@ class AudiobookEngine(
             saveManifest(currentManifest)
         }
 
+        // Auto-merge or create full unified audiobook file when synthesis finishes
+        if (parsedBook.chapters.isNotEmpty()) {
+            try {
+                val allChapterFiles = (1..parsedBook.chapters.size).mapNotNull { idx ->
+                    val f = File(chaptersDir, String.format(java.util.Locale.US, "chapter_%03d.wav", idx))
+                    if (f.exists() && f.length() > 1000) f else null
+                }
+                if (allChapterFiles.size == parsedBook.chapters.size) {
+                    val fullBookWav = File(outputDir, "full_book.wav")
+                    if (allChapterFiles.size > 1) {
+                        val fullDurationMs = concatenateWavs(allChapterFiles, fullBookWav)
+                        val fullDurationSec = fullDurationMs / 1000
+                        Log.i(TAG, "Successfully auto-merged ${allChapterFiles.size} chapters into full_book.wav ($fullDurationSec s)")
+                    } else if (allChapterFiles.size == 1) {
+                        allChapterFiles[0].copyTo(fullBookWav, overwrite = true)
+                        Log.i(TAG, "Single chapter book prepared as full_book.wav")
+                    }
+                    AudioExporter.exportFullBookAudio(context, fullBookWav, parsedBook.title)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating full audiobook: ${e.message}", e)
+            }
+        }
+
         val finalManifest = JSONObject().apply {
             put("title", parsedBook.title)
             put("chapters_count", chaptersArray.length())
             put("total_chapters", parsedBook.chapters.size)
             put("chapters", chaptersArray)
             put("status", "completed")
+            val fullWav = File(outputDir, "full_book.wav")
+            if (fullWav.exists() && fullWav.length() > 1000) {
+                put("full_audiobook_file", "full_book.wav")
+            }
         }
         saveManifest(finalManifest)
 
@@ -195,6 +258,25 @@ class AudiobookEngine(
         tempManifest.renameTo(manifestFile)
     }
 
+    private fun markManifestPaused(title: String, totalChapters: Int, chaptersArray: JSONArray) {
+        try {
+            val pausedManifest = if (manifestFile.exists()) {
+                JSONObject(manifestFile.readText())
+            } else {
+                JSONObject().apply {
+                    put("title", title)
+                    put("total_chapters", totalChapters)
+                }
+            }
+            pausedManifest.put("status", "paused")
+            pausedManifest.put("chapters_count", chaptersArray.length())
+            pausedManifest.put("chapters", chaptersArray)
+            saveManifest(pausedManifest)
+        } catch (saveEx: Exception) {
+            Log.w(TAG, "Failed to save paused status: ${saveEx.message}")
+        }
+    }
+
     private fun concatenateWavs(files: List<File>, outputFile: File): Long {
         if (files.isEmpty()) return 0L
 
@@ -204,9 +286,16 @@ class AudiobookEngine(
         val pcmStreams = mutableListOf<ByteArray>()
 
         for (f in files) {
-            if (!f.exists() || f.length() < 44) continue
+            if (!f.exists() || f.length() < 12) continue
             val bytes = f.readBytes()
-            if (bytes.size >= 44 && String(bytes.copyOfRange(0, 4)) == "RIFF") {
+            val parsed = GeminiTtsClient.extractPcmData(bytes)
+            if (parsed != null) {
+                channels = parsed.channels
+                sampleRate = parsed.sampleRate
+                bitsPerSample = parsed.bitsPerSample
+                val smoothedPcm = applyGentleFadeOut(parsed.pcm, sampleRate, channels, bitsPerSample, 50)
+                pcmStreams.add(smoothedPcm)
+            } else if (bytes.size >= 44 && String(bytes.copyOfRange(0, 4)) == "RIFF") {
                 val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
                 channels = buffer.getShort(22)
                 sampleRate = buffer.getInt(24)
@@ -237,5 +326,35 @@ class AudiobookEngine(
 
         val bytesPerSec = sampleRate * channels * (bitsPerSample / 8)
         return if (bytesPerSec > 0) (totalPcmSize.toLong() * 1000) / bytesPerSec else 0L
+    }
+
+    private fun applyGentleFadeOut(
+        pcm: ByteArray,
+        sampleRate: Int,
+        channels: Short,
+        bitsPerSample: Short,
+        fadeMs: Int = 50
+    ): ByteArray {
+        if (bitsPerSample != 16.toShort() || pcm.size < 4) return pcm
+        val bytesPerSample = (channels * 2).toInt()
+        val totalSamples = pcm.size / bytesPerSample
+        val fadeSamples = ((sampleRate * fadeMs) / 1000).coerceAtMost(totalSamples)
+        if (fadeSamples <= 0) return pcm
+
+        val output = pcm.copyOf()
+        val startSample = totalSamples - fadeSamples
+        val buffer = ByteBuffer.wrap(output).order(ByteOrder.LITTLE_ENDIAN)
+
+        for (i in 0 until fadeSamples) {
+            val sampleIndex = startSample + i
+            val gain = 1.0 - (i.toDouble() / fadeSamples.toDouble())
+            for (ch in 0 until channels) {
+                val bytePos = sampleIndex * bytesPerSample + ch * 2
+                val originalVal = buffer.getShort(bytePos)
+                val fadedVal = (originalVal * gain).toInt().coerceIn(-32768, 32767).toShort()
+                buffer.putShort(bytePos, fadedVal)
+            }
+        }
+        return output
     }
 }
