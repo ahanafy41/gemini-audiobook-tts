@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+Comprehensive Test Suite for Gemini Audiobook TTS Engine.
+Tests smart chunking, markdown stripping, book parsing, WAV header generation,
+Base64 audio decoding, and full end-to-end audiobook compilation.
+"""
+
 from key_quota_manager import (
     KeyQuotaManager,
     compute_key_id,
@@ -5,12 +12,6 @@ from key_quota_manager import (
     parse_retry_delay_from_error,
     get_model_daily_cap,
 )
-#!/usr/bin/env python3
-"""
-Comprehensive Test Suite for Gemini Audiobook TTS Engine.
-Tests smart chunking, markdown stripping, book parsing, WAV header generation,
-Base64 audio decoding, and full end-to-end audiobook compilation.
-"""
 
 import json
 import logging
