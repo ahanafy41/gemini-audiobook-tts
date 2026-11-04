@@ -43,7 +43,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import android.content.ClipboardManager
 import com.antigravity.audiobook.data.GeminiTtsClient
+import com.antigravity.audiobook.data.KeyQuotaManager
 import com.antigravity.audiobook.data.QuotaExceededException
 import com.antigravity.audiobook.domain.DialogueTurnAnnotator
 import com.antigravity.audiobook.domain.MultiSpeakerConfig
@@ -74,6 +76,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         private const val TAG = "MainActivity"
         private const val PREFS_SETTINGS = "gemini_audiobook_settings"
         private const val KEY_API_KEY = "api_key"
+        private const val KEY_API_KEYS = "api_keys"
         private const val KEY_GEMINI_VOICE = "gemini_voice"
         private const val KEY_VOICE_STYLE = "gemini_voice_style"
         private const val KEY_MULTI_SPEAKER = "gemini_multi_speaker"
@@ -145,6 +148,26 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     // State & Controllers
     private lateinit var settingsPrefs: SharedPreferences
+    private val keyQuotaManager by lazy { KeyQuotaManager(filesDir) }
+
+    private fun getStoredApiKeys(): List<String> {
+        val raw = settingsPrefs.getString(KEY_API_KEYS, "") ?: ""
+        if (raw.isNotBlank()) {
+            return raw.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        val single = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+        return if (single.isNotBlank()) listOf(single.trim()) else emptyList()
+    }
+
+    private fun saveApiKeys(keys: List<String>) {
+        val cleanList = keys.map { it.trim() }.filter { it.isNotEmpty() }
+        val joined = cleanList.joinToString("\n")
+        settingsPrefs.edit()
+            .putString(KEY_API_KEYS, joined)
+            .putString(KEY_API_KEY, cleanList.firstOrNull() ?: "")
+            .apply()
+    }
+
     private val customVoices = mutableListOf<VoiceProfile>()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -1220,13 +1243,21 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     // -------------------------------------------------------------------------
 
     private fun updateSettingsUI() {
-        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        if (apiKey.isNotBlank() && apiKey.length >= 15) {
-            val masked = "${apiKey.take(6)}...${apiKey.takeLast(4)}"
-            textApiKeyStatus.text = "المفتاح: $masked"
+        val keys = getStoredApiKeys()
+        if (keys.isNotEmpty()) {
+            val count = keys.size
+            val firstMasked = KeyQuotaManager.maskKey(keys[0])
+            val statusText = if (count > 1) {
+                "المفاتيح: $firstMasked (+${count - 1} أخرى)"
+            } else {
+                "المفتاح: $firstMasked"
+            }
+            textApiKeyStatus.text = statusText
+            textApiKeyStatus.contentDescription = "قائمة المفاتيح: مسجل $count مفاتيح API، المفتاح الأول $firstMasked"
             textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
         } else {
-            textApiKeyStatus.text = "المفتاح غير مسجل"
+            textApiKeyStatus.text = "المفاتيح غير مسجلة"
+            textApiKeyStatus.contentDescription = "مفاتيح API غير مسجلة، اضغط على تعديل لإضافة مفاتيحك"
             textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
 
@@ -1234,9 +1265,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnSelectModel.text = "النموذج: $modelId"
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3.1"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.4.4"
         } catch (e: Exception) {
-            "1.3.1"
+            "1.4.4"
         }
         textAppVersion.text = "الإصدار: $currentVer"
 
@@ -1298,24 +1329,58 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     }
 
     private fun showApiKeyEditDialog() {
-        val currentKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        val input = EditText(this).apply {
-            hint = "أدخل مفتاح Gemini API الخاص بك"
-            setText(currentKey)
-            contentDescription = "حقل إدخال مفتاح Gemini API"
+        val currentKeys = getStoredApiKeys().joinToString("\n")
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             val pad = (16 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad, pad, pad)
         }
 
+        val input = EditText(this).apply {
+            hint = "أدخل مفتاح أو أكثر من مفاتيح Gemini API (كل مفتاح في سطر مستقل)"
+            setText(currentKeys)
+            contentDescription = "حقل إدخال مفاتيح Gemini API، ضع كل مفتاح في سطر مستقل"
+            minLines = 4
+            maxLines = 10
+            gravity = android.view.Gravity.TOP
+            val pad = (12 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        container.addView(input)
+
+        val btnPaste = Button(this).apply {
+            text = "لصق من الحافظة"
+            contentDescription = "زر لصق مفتاح جديد من الحافظة وإضافته للقائمة"
+            setOnClickListener {
+                val clipManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                val clipText = clipManager?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
+                if (!clipText.isNullOrBlank() && clipText.startsWith("AIzaSy")) {
+                    val existing = input.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                    if (!existing.contains(clipText)) {
+                        existing.add(clipText)
+                        input.setText(existing.joinToString("\n"))
+                        announceStatus("تمت إضافة المفتاح من الحافظة للقائمة بنجاح")
+                        Toast.makeText(this@MainActivity, "تمت إضافة المفتاح", Toast.LENGTH_SHORT).show()
+                    } else {
+                        announceStatus("المفتاح موجود بالفعل في القائمة")
+                    }
+                } else {
+                    announceStatus("الحافظة لا تحتوي على مفتاح API صالح يبدأ بـ AIzaSy")
+                    Toast.makeText(this@MainActivity, "الحافظة فارغة أو لا تحوي مفتاح صالح", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        container.addView(btnPaste)
+
         AlertDialog.Builder(this)
-            .setTitle(R.string.dialog_enter_api_key)
-            .setView(input)
+            .setTitle("إدارة مفاتيح Gemini API المتعددة")
+            .setView(container)
             .setPositiveButton(R.string.action_save) { _, _ ->
-                val newKey = input.text.toString().trim()
-                settingsPrefs.edit().putString(KEY_API_KEY, newKey).apply()
+                val lines = input.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }
+                saveApiKeys(lines)
                 updateSettingsUI()
-                announceStatus("تم حفظ مفتاح Gemini API بنجاح")
-                Toast.makeText(this, "تم حفظ المفتاح", Toast.LENGTH_SHORT).show()
+                announceStatus("تم حفظ ${lines.size} مفتاح API بنجاح")
+                Toast.makeText(this, "تم حفظ ${lines.size} مفتاح", Toast.LENGTH_SHORT).show()
                 fetchAndLoadCustomVoices(userTriggered = false)
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -1323,12 +1388,41 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     }
 
     private fun testApiKeyConnection() {
-        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        if (apiKey.isBlank() || apiKey.length < 15) {
+        val keys = getStoredApiKeys()
+        if (keys.isEmpty()) {
             announceStatus("يرجى إدخال مفتاح Gemini API أولاً لفحصه")
             Toast.makeText(this, "المفتاح غير مسجل بعد", Toast.LENGTH_SHORT).show()
             return
         }
+
+        announceStatus("جارٍ فحص ${keys.size} مفتاح API مع خوادم Google...")
+        lifecycleScope.launch {
+            try {
+                val client = GeminiTtsClient(
+                    apiKeys = keys,
+                    quotaManager = keyQuotaManager
+                )
+                val audio = client.synthesize("اختبار اتصال مفاتيح API", voiceName = "Charon")
+                if (audio.size > 1000) {
+                    val msg = "تم فحص المفاتيح بنجاح! الاتصال يعمل (${keys.size} مفاتيح جاهزة)."
+                    announceStatus(msg)
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("نجاح الاتصال")
+                        .setMessage(msg)
+                        .setPositiveButton("حسناً", null)
+                        .show()
+                }
+            } catch (e: Exception) {
+                val err = "فحص الاتصال: ${e.message}"
+                announceStatus(err)
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("حالة الاتصال")
+                    .setMessage(err)
+                    .setPositiveButton("حسناً", null)
+                    .show()
+            }
+        }
+    }
 
         announceStatus("جارِ فحص الاتصال بمفتاح Gemini API...")
         lifecycleScope.launch {
@@ -1772,7 +1866,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         acquireWakeLock()
         lifecycleScope.launch {
             try {
-                val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
+                val keys = getStoredApiKeys()
                 val narratorVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
                 val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
                 val stylePreset = VoiceStylePreset.fromId(styleId)
@@ -1780,9 +1874,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 val characterVoice = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
                 val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
 
-                if (apiKey.isBlank() || apiKey.length < 15) {
+                if (keys.isEmpty()) {
                     announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لتحويل الكتاب بالذكاء الاصطناعي")
-                    Toast.makeText(this@MainActivity, "يرجى إدخال مفتاح Gemini API أولاً في الإعدادات", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "يرجى إدخال مفاتيح Gemini API في الإعدادات", Toast.LENGTH_LONG).show()
                     bottomNav.selectedItemId = R.id.tab_settings
                     return@launch
                 }
@@ -1793,7 +1887,11 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                     sourceFile.copyTo(persistentSource, overwrite = true)
                 }
 
-                val ttsClient = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+                val ttsClient = GeminiTtsClient(
+                    apiKeys = keys,
+                    modelId = modelId,
+                    quotaManager = keyQuotaManager
+                )
                 val multiConfig = if (isMultiSpeaker) {
                     MultiSpeakerConfig(
                         isEnabled = true,
