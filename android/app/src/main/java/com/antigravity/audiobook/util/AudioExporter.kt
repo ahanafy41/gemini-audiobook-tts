@@ -20,12 +20,96 @@ import java.io.File
 import android.media.MediaScannerConnection
 import java.util.Locale
 
+data class ChapterAudioMeta(
+    val index: Int,
+    val title: String,
+    val durationMs: Long,
+    val audioRelativePath: String = ""
+)
+
 object AudioExporter {
 
     private const val TAG = "AudioExporter"
     private const val AUTHORITY = "com.antigravity.audiobook.fileprovider"
 
     const val DEDICATED_DIR = "GeminiAudiobook"
+
+    fun generateCueSheet(
+        bookTitle: String,
+        chapters: List<ChapterAudioMeta>,
+        unifiedWavFileName: String = "full_book.wav",
+        silencePaddingMs: Long = 400L
+    ): String {
+        val cleanBookTitle = bookTitle.replace('"', '\'').trim()
+        val lines = mutableListOf(
+            "REM GENRE Audiobook",
+            "REM DATE 2026",
+            "PERFORMER \"Gemini Audiobook\"",
+            "TITLE \"$cleanBookTitle\"",
+            "FILE \"$unifiedWavFileName\" WAVE"
+        )
+
+        var currentMs = 0L
+        for (i in chapters.indices) {
+            val ch = chapters[i]
+            val trackNum = i + 1
+            val cleanTitle = ch.title.replace('"', '\'').trim()
+            val totalSeconds = currentMs / 1000.0
+            val minutes = (totalSeconds / 60).toInt()
+            val seconds = (totalSeconds % 60).toInt()
+            val frames = ((totalSeconds - totalSeconds.toInt()) * 75.0).toInt()
+
+            lines.add(String.format(Locale.US, "  TRACK %02d AUDIO", trackNum))
+            lines.add("    TITLE \"$cleanTitle\"")
+            lines.add(String.format(Locale.US, "    INDEX 01 %02d:%02d:%02d", minutes, seconds, frames))
+
+            currentMs += ch.durationMs + silencePaddingMs
+        }
+
+        return lines.joinToString("\n") + "\n"
+    }
+
+    fun generateM3uPlaylist(
+        bookTitle: String,
+        chapters: List<ChapterAudioMeta>
+    ): String {
+        val lines = mutableListOf(
+            "#EXTM3U",
+            "#PLAYLIST:$bookTitle"
+        )
+
+        for (ch in chapters) {
+            val durSec = (ch.durationMs / 1000).coerceAtLeast(1)
+            val relPath = if (ch.audioRelativePath.isNotBlank()) {
+                ch.audioRelativePath
+            } else {
+                String.format(Locale.US, "chapters/chapter_%03d.wav", ch.index)
+            }
+            lines.add("#EXTINF:$durSec,${ch.title}")
+            lines.add(relPath)
+        }
+
+        return lines.joinToString("\n") + "\n"
+    }
+
+    fun writeCueAndM3uFiles(
+        outputDir: File,
+        bookTitle: String,
+        chapters: List<ChapterAudioMeta>,
+        unifiedWavName: String = "full_book.wav"
+    ) {
+        try {
+            outputDir.mkdirs()
+            val cueContent = generateCueSheet(bookTitle, chapters, unifiedWavName)
+            File(outputDir, "book.cue").writeText(cueContent, Charsets.UTF_8)
+
+            val m3uContent = generateM3uPlaylist(bookTitle, chapters)
+            File(outputDir, "playlist.m3u").writeText(m3uContent, Charsets.UTF_8)
+            Log.i(TAG, "Generated book.cue and playlist.m3u in ${outputDir.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to write CUE/M3U files: ${e.message}")
+        }
+    }
 
     fun hasDirectStorageAccess(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

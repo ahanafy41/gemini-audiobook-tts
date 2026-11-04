@@ -230,6 +230,17 @@ class AudiobookEngine(
                         Log.i(TAG, "Single chapter book prepared as full_book.wav")
                     }
                     AudioExporter.exportFullBookAudio(context, fullBookWav, parsedBook.title)
+
+                    // Generate standard CUE sheet and M3U playlist
+                    val chapterMetaList = mutableListOf<com.antigravity.audiobook.util.ChapterAudioMeta>()
+                    for (cIdx in 0 until chaptersArray.length()) {
+                        val chObj = chaptersArray.getJSONObject(cIdx)
+                        val title = chObj.optString("title", "فصل ${cIdx + 1}")
+                        val durMs = chObj.optLong("duration_ms", 0L)
+                        val relPath = chObj.optString("audio_file", "chapters/chapter_${String.format(java.util.Locale.US, "%03d", cIdx + 1)}.wav")
+                        chapterMetaList.add(com.antigravity.audiobook.util.ChapterAudioMeta(cIdx + 1, title, durMs, relPath))
+                    }
+                    com.antigravity.audiobook.util.AudioExporter.writeCueAndM3uFiles(outputDir, parsedBook.title, chapterMetaList, "full_book.wav")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating full audiobook: ${e.message}", e)
