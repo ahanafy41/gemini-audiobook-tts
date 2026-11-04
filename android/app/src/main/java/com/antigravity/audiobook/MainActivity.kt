@@ -168,6 +168,14 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             .apply()
     }
 
+    private fun getActiveTtsClient(modelId: String = DEFAULT_MODEL_ID): GeminiTtsClient {
+        return GeminiTtsClient(
+            apiKeys = getStoredApiKeys(),
+            modelId = modelId,
+            quotaManager = keyQuotaManager
+        )
+    }
+
     private val customVoices = mutableListOf<VoiceProfile>()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
@@ -334,7 +342,14 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         // Library Actions
         btnAddBook.setOnClickListener {
             try {
-                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "text/x-markdown"))
+                filePickerLauncher.launch(arrayOf(
+                    "text/plain",
+                    "text/markdown",
+                    "text/x-markdown",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/msword",
+                    "*/*"
+                ))
             } catch (e: Exception) {
                 Log.e(TAG, "Error launching file picker: ${e.message}")
                 Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
@@ -523,8 +538,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     }
 
     private fun fetchAndLoadCustomVoices(userTriggered: Boolean = false) {
-        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        if (apiKey.isBlank() || apiKey.length < 15) {
+        val keys = getStoredApiKeys()
+        if (keys.isEmpty()) {
             if (userTriggered) {
                 announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لمزامنة الأصوات")
                 Toast.makeText(this, "يرجى تسجيل المفتاح في الإعدادات أولاً", Toast.LENGTH_SHORT).show()
@@ -538,7 +553,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         lifecycleScope.launch {
             try {
-                val client = GeminiTtsClient(apiKey = apiKey)
+                val client = getActiveTtsClient()
                 val fetched = client.listCustomVoices()
                 if (fetched.isNotEmpty()) {
                     customVoices.clear()
@@ -824,8 +839,8 @@ Speaker2: أهلاً بك يا صديقي
     }
 
     private fun testCurrentAudition() {
-        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        if (apiKey.isBlank() || apiKey.length < 15) {
+        val keys = getStoredApiKeys()
+        if (keys.isEmpty()) {
             announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
             Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
             bottomNav.selectedItemId = R.id.tab_settings
@@ -842,7 +857,7 @@ Speaker2: أهلاً بك يا صديقي
         announceStatus("جارِ توليد عينة صوتية بالذكاء الاصطناعي...")
         lifecycleScope.launch {
             try {
-                val client = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+                val client = getActiveTtsClient(modelId)
                 val audioData = withContext(Dispatchers.IO) {
                     if (isMultiSpeaker) {
                         val multiConfig = MultiSpeakerConfig(
@@ -871,8 +886,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     }
 
     private fun showVoiceDesignDialog() {
-        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        if (apiKey.isBlank() || apiKey.length < 15) {
+        val keys = getStoredApiKeys()
+        if (keys.isEmpty()) {
             announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
             Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
             bottomNav.selectedItemId = R.id.tab_settings
@@ -926,7 +941,7 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                 val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
                 lifecycleScope.launch {
                     try {
-                        val client = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+                        val client = getActiveTtsClient(modelId)
                         val (voiceId, sampleBytes) = client.createCustomVoice(name, prompt)
                         if (voiceId.isBlank()) {
                             throw IllegalStateException("لم يُرجع الخادم معرف الصوت (Voice ID).")
@@ -962,8 +977,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     }
 
     private fun showVoiceReplicationDialog() {
-        val apiKey = settingsPrefs.getString(KEY_API_KEY, "") ?: ""
-        if (apiKey.isBlank() || apiKey.length < 15) {
+        val keys = getStoredApiKeys()
+        if (keys.isEmpty()) {
             announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
             Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
             bottomNav.selectedItemId = R.id.tab_settings
@@ -1199,7 +1214,7 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
             lifecycleScope.launch {
                 try {
-                    val client = GeminiTtsClient(apiKey = apiKey, modelId = modelId)
+                    val client = getActiveTtsClient(modelId)
                     val (voiceId, sampleBytes) = client.replicateCustomVoice(voiceName, refBytes, consentBytes)
                     val newProfile = VoiceProfile(
                         id = voiceId,
@@ -1563,7 +1578,14 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         } else {
             announceStatus("يرجى اختيار ملف النص الأصلي للكتاب لاستئناف معالجته.")
             try {
-                filePickerLauncher.launch(arrayOf("text/plain", "text/markdown", "text/x-markdown"))
+                filePickerLauncher.launch(arrayOf(
+                    "text/plain",
+                    "text/markdown",
+                    "text/x-markdown",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/msword",
+                    "*/*"
+                ))
             } catch (e: Exception) {
                 Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
             }
@@ -1780,9 +1802,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 announceStatus("جارِ استيراد الكتاب وقراءة الملف...")
                 val rawName = getFileNameFromUri(uri)
                 val ext = rawName?.substringAfterLast('.', "")?.lowercase() ?: ""
-                if (ext.isNotEmpty() && ext != "txt" && ext != "md" && ext != "markdown") {
-                    announceStatus("عذراً، يجب اختيار ملف نصي (.txt) أو مارك داون (.md) فقط")
-                    Toast.makeText(this@MainActivity, "نوع الملف غير مدعوم. اختر ملف .txt أو .md فقط", Toast.LENGTH_LONG).show()
+                if (ext.isNotEmpty() && ext != "txt" && ext != "md" && ext != "markdown" && ext != "docx") {
+                    announceStatus("عذراً، يجب اختيار ملف نصي (.txt) أو مارك داون (.md) أو مستند وورد (.docx)")
+                    Toast.makeText(this@MainActivity, "نوع الملف غير مدعوم. اختر ملف .txt أو .md أو .docx", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 val safeName = if (!rawName.isNullOrBlank()) {
@@ -1882,7 +1904,8 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 }
 
                 bookDir.mkdirs()
-                val persistentSource = File(bookDir, "source_book.txt")
+                val sourceExt = if (sourceFile.extension.isNotBlank()) sourceFile.extension else "txt"
+                val persistentSource = File(bookDir, "source_book.$sourceExt")
                 if (sourceFile.absolutePath != persistentSource.absolutePath) {
                     sourceFile.copyTo(persistentSource, overwrite = true)
                 }
