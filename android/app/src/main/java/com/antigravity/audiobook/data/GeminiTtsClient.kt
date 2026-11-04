@@ -38,10 +38,45 @@ class QuotaExceededException(message: String) : Exception(message)
  * supports style presets, multi-speaker dialogue, and custom Voice Design IDs.
  */
 class GeminiTtsClient(
-    private val apiKey: String,
-    private val modelId: String = DEFAULT_MODEL_ID,
-    private val customEndpoint: String? = null
+    private var apiKeys: List<String> = emptyList(),
+    val modelId: String = DEFAULT_MODEL_ID,
+    private val customEndpoint: String? = null,
+    var quotaManager: KeyQuotaManager? = null
 ) {
+    // Secondary constructor for single key backward compatibility
+    constructor(
+        apiKey: String,
+        modelId: String = DEFAULT_MODEL_ID,
+        customEndpoint: String? = null,
+        quotaManager: KeyQuotaManager? = null
+    ) : this(
+        if (apiKey.isNotBlank()) listOf(apiKey.trim()) else emptyList(),
+        modelId,
+        customEndpoint,
+        quotaManager
+    )
+
+    private var activeKeyIndex = 0
+
+    fun setApiKeys(keys: List<String>) {
+        this.apiKeys = keys.map { it.trim() }.filter { it.isNotEmpty() }
+        this.activeKeyIndex = quotaManager?.findFirstAvailableKeyIndex(this.apiKeys, modelId) ?: 0
+    }
+
+    fun getApiKeys(): List<String> = apiKeys
+
+    fun getActiveApiKey(): String {
+        if (apiKeys.isEmpty()) return ""
+        // Ensure activeKeyIndex is pointing to an available key if possible
+        val qm = quotaManager
+        if (qm != null) {
+            val validIdx = qm.findFirstAvailableKeyIndex(apiKeys, modelId, activeKeyIndex)
+            activeKeyIndex = validIdx
+        }
+        return if (activeKeyIndex in apiKeys.indices) apiKeys[activeKeyIndex] else apiKeys[0]
+    }
+
+    fun hasApiKey(): Boolean = apiKeys.any { it.isNotBlank() && it.trim().length >= 15 }
 
     companion object {
         const val DEFAULT_MODEL_ID = "gemini-3.8-flash-tts"
@@ -199,14 +234,6 @@ class GeminiTtsClient(
     }
 
     private val httpClient = OkHttpClient.Builder()
-        .dns(ResilientDns())
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .retryOnConnectionFailure(true)
-        .build()
-
-    fun hasApiKey(): Boolean = apiKey.isNotBlank() && apiKey.trim().length >= 15
 
     suspend fun synthesize(
         text: String,
@@ -223,8 +250,6 @@ class GeminiTtsClient(
         if (!hasApiKey()) {
             throw IllegalArgumentException("API key is not configured.")
         }
-
-        val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$apiKey"
 
         val payload = JSONObject()
         val generationConfig = JSONObject().apply {
@@ -301,56 +326,84 @@ class GeminiTtsClient(
         payload.put("generationConfig", generationConfig)
 
         val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
-        val request = Request.Builder()
-            .url(url)
-            .post(requestBody)
-            .header("User-Agent", "GeminiAudiobookAndroid/1.0")
-            .build()
+        val totalAttempts = apiKeys.size.coerceAtLeast(1)
+        var lastError: Exception? = null
 
-        try {
-            httpClient.newCall(request).execute().use { response ->
-                if (response.code == 429) {
-                    val errorBody = response.body?.string() ?: ""
-                    Log.w(TAG, "Gemini HTTP 429 Rate Limit: $errorBody")
-                    throw QuotaExceededException("تم تجاوز حد الطلبات للدقيقة (Rate limit 429). يرجى الانتظار والمحاولة مجدداً.")
-                } else if (response.code in 500..599) {
-                    val errorBody = response.body?.string() ?: ""
-                    Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
-                    throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
-                } else if (!response.isSuccessful) {
-                    val errorBody = response.body?.string() ?: ""
-                    Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
-                    throw IllegalStateException("API error ${response.code}: $errorBody")
-                }
+        for (attempt in 0 until totalAttempts) {
+            val currentKey = getActiveApiKey()
+            val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$currentKey"
 
-                val responseStr = response.body?.string() ?: ""
-                val json = JSONObject(responseStr)
-                val rawAudio = extractAudioBytes(json)
-                val parsed = extractPcmData(rawAudio)
-                return@withContext if (parsed != null) {
-                    createWavHeader(
-                        parsed.pcm,
-                        sampleRate = parsed.sampleRate,
-                        channels = parsed.channels,
-                        bitsPerSample = parsed.bitsPerSample
-                    )
-                } else if (rawAudio.size >= 4 &&
-                    rawAudio[0] == 'R'.code.toByte() &&
-                    rawAudio[1] == 'I'.code.toByte() &&
-                    rawAudio[2] == 'F'.code.toByte() &&
-                    rawAudio[3] == 'F'.code.toByte()
-                ) {
-                    rawAudio
-                } else {
-                    createWavHeader(rawAudio, sampleRate = 24000)
+            val request = Request.Builder()
+                .url(url)
+                .post(requestBody)
+                .header("User-Agent", "GeminiAudiobookAndroid/1.0")
+                .build()
+
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    if (response.code == 429) {
+                        val errorBody = response.body?.string() ?: ""
+                        Log.w(TAG, "Gemini HTTP 429 Rate Limit on key ${KeyQuotaManager.maskKey(currentKey)}: $errorBody")
+                        val retryDelay = KeyQuotaManager.parseRetryDelay(errorBody)
+                        quotaManager?.record429Exhaustion(currentKey, modelId, retryDelay, errorBody)
+
+                        val (nextIdx, nextKey) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                        if (nextIdx != -1 && nextKey != null) {
+                            Log.i(TAG, "Rotating to next ready key: ${KeyQuotaManager.maskKey(nextKey)}")
+                            activeKeyIndex = nextIdx
+                            lastError = QuotaExceededException("Rate limit 429")
+                            return@use
+                        } else {
+                            val (_, renewalMsg) = quotaManager?.getEarliestRenewalTime(apiKeys, modelId) ?: Pair(0L, "غير محدد")
+                            throw QuotaExceededException("جميع مفاتيح API مستنفدة الحصة. أقرب موعد للتجديد بعد: $renewalMsg.")
+                        }
+                    } else if (response.code in 500..599) {
+                        val errorBody = response.body?.string() ?: ""
+                        Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
+                        throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
+                    } else if (!response.isSuccessful) {
+                        val errorBody = response.body?.string() ?: ""
+                        Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                        throw IllegalStateException("API error ${response.code}: $errorBody")
+                    }
+
+                    // Success: Record quota success
+                    quotaManager?.recordSuccess(currentKey, modelId)
+                    val responseStr = response.body?.string() ?: ""
+                    val json = JSONObject(responseStr)
+                    val rawAudio = extractAudioBytes(json)
+                    val parsed = extractPcmData(rawAudio)
+                    return@withContext if (parsed != null) {
+                        createWavHeader(
+                            parsed.pcm,
+                            sampleRate = parsed.sampleRate,
+                            channels = parsed.channels,
+                            bitsPerSample = parsed.bitsPerSample
+                        )
+                    } else if (rawAudio.size >= 4 &&
+                        rawAudio[0] == 'R'.code.toByte() &&
+                        rawAudio[1] == 'I'.code.toByte() &&
+                        rawAudio[2] == 'F'.code.toByte() &&
+                        rawAudio[3] == 'F'.code.toByte()
+                    ) {
+                        rawAudio
+                    } else {
+                        createWavHeader(rawAudio, sampleRate = 24000)
+                    }
                 }
+            } catch (qee: QuotaExceededException) {
+                lastError = qee
+                val (nextIdx, _) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                if (nextIdx == -1) {
+                    throw qee
+                }
+            } catch (ioe: IOException) {
+                Log.w(TAG, "Network connection error: ${ioe.message}")
+                throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت: ${ioe.localizedMessage ?: ioe.message}")
             }
-        } catch (qee: QuotaExceededException) {
-            throw qee
-        } catch (ioe: IOException) {
-            Log.w(TAG, "Network connection error: ${ioe.message}")
-            throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت: ${ioe.localizedMessage ?: ioe.message}")
         }
+
+        throw lastError ?: QuotaExceededException("تم تجاوز حد الطلبات لكافة المفاتيح.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {
@@ -438,8 +491,9 @@ class GeminiTtsClient(
         if (!hasApiKey()) {
             throw IllegalArgumentException("API key is not configured.")
         }
+        val currentKey = getActiveApiKey()
         val cleanModel = modelId.removePrefix("models/")
-        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$currentKey"
         val payload = JSONObject().apply {
             put("store", true)
             put("voice", JSONObject().apply {
@@ -455,7 +509,7 @@ class GeminiTtsClient(
         val request = Request.Builder()
             .url(url)
             .post(requestBody)
-            .header("x-goog-api-key", apiKey)
+            .header("x-goog-api-key", currentKey)
             .header("User-Agent", "GeminiAudiobookAndroid/1.1.5")
             .build()
 
@@ -536,8 +590,9 @@ class GeminiTtsClient(
         if (!hasApiKey()) {
             throw IllegalArgumentException("API key is not configured.")
         }
+        val currentKey = getActiveApiKey()
         val cleanModel = modelId.removePrefix("models/")
-        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$currentKey"
 
         val refB64 = Base64.encodeToString(referenceAudioBytes, Base64.NO_WRAP)
         val consentB64 = Base64.encodeToString(consentAudioBytes, Base64.NO_WRAP)
@@ -564,7 +619,7 @@ class GeminiTtsClient(
         val request = Request.Builder()
             .url(url)
             .post(requestBody)
-            .header("x-goog-api-key", apiKey)
+            .header("x-goog-api-key", currentKey)
             .header("User-Agent", "GeminiAudiobookAndroid/1.2.1")
             .build()
 
@@ -644,11 +699,12 @@ class GeminiTtsClient(
 
     suspend fun listCustomVoices(): List<VoiceProfile> = withContext(Dispatchers.IO) {
         if (!hasApiKey()) return@withContext emptyList()
-        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$apiKey"
+        val currentKey = getActiveApiKey()
+        val url = "https://generativelanguage.googleapis.com/v1beta/voices?key=$currentKey"
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("x-goog-api-key", apiKey)
+            .header("x-goog-api-key", currentKey)
             .header("User-Agent", "GeminiAudiobookAndroid/1.1.9")
             .build()
 
