@@ -1,48 +1,37 @@
-# Gemini Audiobook TTS
+# Gemini Audiobook TTS (Android & Desktop Suite)
 
-[![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B-green.svg)](https://android.com)
-[![Language](https://img.shields.io/badge/Language-Kotlin%20100%25-purple.svg)](https://kotlinlang.org)
-[![API Level](https://img.shields.io/badge/Target%20SDK-34%20(Android%2014)-blue.svg)](https://developer.android.com)
-[![Accessibility](https://img.shields.io/badge/Accessibility-TalkBack%20%26%20Jieshuo%20(CSR)-orange.svg)](#accessibility--screen-reader-first-design)
-[![Latest Release](https://img.shields.io/badge/Release-v1.2.1-success.svg)](https://github.com/ahanafy41/gemini-audiobook-tts/releases)
+[![Platform](https://img.shields.io/badge/Platform-Android%208.0%2B%20%7C%20Windows%20%7C%20Linux-green.svg)](https://android.com)
+[![Language](https://img.shields.io/badge/Language-Kotlin%20%7C%20Python-purple.svg)](https://kotlinlang.org)
+[![Accessibility](https://img.shields.io/badge/Accessibility-TalkBack%20%26%20Jieshuo%20%26%20NVDA-orange.svg)](#accessibility--screen-reader-first-design)
+[![Latest Release](https://img.shields.io/badge/Release-v1.5.0-success.svg)](https://github.com/ahanafy41/gemini-audiobook-tts/releases)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-A high-performance, standalone native Android application that converts plain text documents (`.txt`), Markdown files (`.md`), and digital books into studio-grade audiobooks segmented into chapters. Powered by Google's state-of-the-art **Gemini 3.8 Flash TTS** neural engine, and engineered from the ground up with a strict **Screen Reader First** accessibility architecture for visually impaired and blind users.
+A high-performance, accessible suite that converts plain text documents (`.txt`), Markdown files (`.md`), and Microsoft Word documents (`.docx`) into studio-grade audiobooks segmented into chapters. Powered by Google's state-of-the-art **Gemini 3.8 Flash TTS** neural engine, and engineered from the ground up with a strict **Screen Reader First** accessibility architecture for blind and visually impaired users across **Android** (TalkBack & Jieshuo) and **Desktop** (NVDA).
 
 ---
 
 ## 🚀 Key Highlights
 
-- **100% Standalone Native Android**: Built in Kotlin with Jetpack components and OkHttp. Zero third-party dependencies, zero terminal requirements, no background daemon setups. Install the APK and start listening immediately.
-- **Screen Reader First (TalkBack & Jieshuo / CSR)**: Fully accessible UI complying with WCAG 2.2 Level AAA standards, featuring large touch targets, live auditory announcements, and automatic **Audio Focus Ducking** during playback.
-- **Gemini 3.8 Flash Neural Speech**: Direct integration with Google's latest multimodal speech models (`gemini-3.8-flash-tts` and `gemini-3.8-flash-lite-tts`).
-- **30 Prebuilt Voices & 4 Narrative Styles**: Select from 30 astronomical and mythological voices with customizable delivery styles (Documentary, Dramatic, Broadcast, Natural).
-- **Multi-Speaker Dialogue Engine**: Native parsing for scripts and podcast formats (`Speaker1: / Speaker2:` or `Narrator: / Character:`) compatible with Google AI Studio, as well as classic quotation marks (`«...»` and `"..."`).
-- **Human Voice Replication**: In-app vocal sampling (10–30s) and mandatory consent voice verification to clone and apply real voices to your books.
-- **AI Voice Design**: Describe any custom vocal persona in natural language to generate unique acoustic identities.
-- **Quick "Paste & Convert"**: Instant one-tap conversion of clipboard text into accessible audio tracks with live character counting.
-- **Background Player with Media3 / ExoPlayer**: Foreground playback service with lock screen controls, playback speed adjustment, and position tracking.
-- **Export & Share**: Automatically exports synthesized chapters to the public `Download/Audiobooks/` directory and supports one-tap file sharing.
-- **Seamless In-App OTA Updates**: Built-in update checker that downloads and installs new releases directly from GitHub Releases with a permanent signing keystore.
-
----
-
-## ♿ Accessibility & Screen Reader First Design
-
-Gemini Audiobook TTS was architected specifically with blind and visually impaired users in mind, rigorously tested with **Google TalkBack** and the **Jieshuo (Commentary Screen Reader / CSR)** Chinese screen reader:
-
-1. **Intelligent Audio Focus Ducking**:
-   - The application manages Android's `AudioFocusRequest`. When a screen reader speaks or an accessibility gesture is triggered, the audiobook automatically ducks (lowers volume to 20%) or pauses, ensuring screen reader feedback is never muffled or drowned out.
-2. **Concise Spoken Labels & Zero Clutter**:
-   - All UI buttons, sliders, and navigation tabs are labeled with clear, functional descriptions. Visual-only decorations, redundant prefixes, and bracketed English acronyms were eliminated to keep spoken verbosity minimal.
-3. **Live Region Auditory Feedback (`accessibilityLiveRegion`)**:
-   - Real-time synthesis progress, chapter transitions, character counts, and network statuses are broadcast instantly to the screen reader without requiring manual swiping or screen exploration.
-4. **Accessible Touch Targets**:
-   - Every interactive element exceeds the minimum 48dp accessibility guideline, ensuring effortless gesture navigation and touch targeting.
-5. **Strict File Picker Filtering**:
-   - File choosers enforce strict MIME-type and extension filtering (`.txt` and `.md`), preventing accidental selection of unsupported formats, with immediate auditory error announcements if an invalid file is selected.
-
----
+- **Dual-Platform Architecture**:
+  - **Native Android App**: Built in Kotlin with Media3, Foreground Service, WakeLock protection, and accessible touch controls.
+  - **Accessible Desktop Suite**: Built in wxPython with NVDA screen reader optimization, bilingual English/Arabic Hub interface, Windows DPAPI local key encryption, and one-click `run_desktop.bat` launcher.
+- **Persistent Key Quota Manager & Multi-Key Rotation**:
+  - Support for unlimited Gemini API keys with instant, automatic failover upon HTTP 429 rate limits.
+  - Automatic `retryDelay` extraction and Google Pacific Midnight daily quota reset tracking in `key_quotas.json`.
+- **Universal Multilingual Dialogue & Emotion Engine**:
+  - Dual-narrator assignment (`Speaker1` / `Speaker2`) with automatic separation of narration from character dialogue.
+  - Inquit verb splitting across 6 languages (Arabic, English, French, Spanish, German, Russian).
+  - Narrative emotion inference (whisper, anger, sadness, joy, calm) mapped to dynamic TTS style prompts.
+- **Spoken Chapter Titles & Expanded Book Parsing**:
+  - Vocalizes chapter headings before starting narration with a natural `<short pause>`.
+  - Zero-dependency Microsoft Word (`.docx`) parsing via native XML extraction.
+  - Expanded Arabic and numbered chapter recognition patterns.
+- **CUE Sheet & M3U Playlist Export**:
+  - Generates standard `.cue` chapter sheets and `.m3u` playlists alongside unified `.wav` audiobooks for seamless chapter jumping in third-party media players.
+- **Human Voice Replication & Voice Design**:
+  - In-app voice cloning from audio samples and legal consent recordings via Google Gemini API.
+- **Screen Reader First (TalkBack, Jieshuo & NVDA)**:
+  - Designed for 100% auditory accessibility, live announcements, and Audio Focus Ducking.
 
 ## 📥 Download & Installation
 
