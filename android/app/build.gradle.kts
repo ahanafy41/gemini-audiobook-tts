@@ -93,4 +93,8 @@ dependencies {
 
     // Encrypted Storage for BYOK API Key
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Unit Testing
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
