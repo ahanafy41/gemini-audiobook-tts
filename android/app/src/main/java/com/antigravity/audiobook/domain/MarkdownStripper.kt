@@ -71,7 +71,7 @@ class MarkdownStripper {
 
         val cleanedBody = cleanMarkdownText(body)
         val narrative = if (cleanedBody.isNotEmpty()) {
-            cleanedBody
+            "$chapterTitle. <short pause>\n\n$cleanedBody"
         } else {
             chapterTitle
         }

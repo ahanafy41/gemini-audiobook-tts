@@ -23,9 +23,10 @@ class BookParser(
         private const val TAG = "BookParser"
 
         private val CHAPTER_PATTERNS = listOf(
-            Regex("^\\s*(الفصل|الباب|الجزء|المبحث|القسم)\\s+([^\\n:–—\\-]+)[:–—\\-\\s]*(.*?)$", RegexOption.MULTILINE),
-            Regex("^\\s*(مقدمة|تمهيد|فاتحة الكتاب|توطئة|خاتمة|خلاصة)\\s*$", RegexOption.MULTILINE),
-            Regex("^\\s*(Chapter|Section|Part|Book)\\s+([0-9IVXLCDMivxlcdm]+)[:–—\\-\\s]*(.*?)$", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
+            Regex("^\\s*(الفصل|الباب|الجزء|المبحث|المطلب|القسم|الكتاب)\\s+([^\\n:–—\\-]+)[:–—\\-\\s]*(.*?)$", RegexOption.MULTILINE),
+            Regex("^\\s*(مقدمة|تمهيد|فاتحة الكتاب|مدخل|توطئة|خاتمة|الخاتمة|خلاصة)\\s*$", RegexOption.MULTILINE),
+            Regex("^\\s*(Chapter|Section|Part|Book|Volume|Act|Scene)\\s+([0-9IVXLCDMivxlcdm]+)[:–—\\-\\s]*(.*?)$", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE)),
+            Regex("^[ \\t]*([0-9]{1,3}|[IVXLCDM]{1,8})[.:–—\\-][ \\t]+([^\\r\\n]{1,60})$", RegexOption.MULTILINE)
         )
     }
 
@@ -104,7 +105,7 @@ class BookParser(
                         CleanedChapter(
                             chapterTitle = "مقدمة",
                             level = 1,
-                            text = cleanPref,
+                            text = "مقدمة. <short pause>\n\n$cleanPref",
                             rawLength = preface.length
                         )
                     )
@@ -116,10 +117,11 @@ class BookParser(
                 val nextStart = if (i + 1 < filtered.size) filtered[i + 1].start else trimmed.length
                 val body = trimmed.substring(current.end, nextStart).trim()
                 val cleanBody = markdownStripper.cleanMarkdownText(body)
+                val titleClean = current.title.trim().lines().firstOrNull()?.trim()?.take(60) ?: current.title
                 val spoken = if (cleanBody.isNotEmpty()) {
-                    cleanBody
+                    "$titleClean. <short pause>\n\n$cleanBody"
                 } else {
-                    current.title
+                    titleClean
                 }
 
                 rawChapters.add(
@@ -242,7 +244,42 @@ class BookParser(
         return chapters
     }
 
+    fun extractDocxText(file: File): String {
+        val sb = StringBuilder()
+        try {
+            java.util.zip.ZipFile(file).use { zip ->
+                val entry = zip.getEntry("word/document.xml") ?: return ""
+                zip.getInputStream(entry).use { stream ->
+                    val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                    val builder = factory.newDocumentBuilder()
+                    val doc = builder.parse(stream)
+                    val pNodes = doc.getElementsByTagName("w:p")
+                    for (i in 0 until pNodes.length) {
+                        val pNode = pNodes.item(i)
+                        val tNodes = (pNode as org.w3c.dom.Element).getElementsByTagName("w:t")
+                        val pText = StringBuilder()
+                        for (j in 0 until tNodes.length) {
+                            pText.append(tNodes.item(j).textContent)
+                        }
+                        val trimmedP = pText.toString().trim()
+                        if (trimmedP.isNotEmpty()) {
+                            sb.append(trimmedP).append("\n\n")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse docx XML: ${e.message}")
+        }
+        return sb.toString().trim()
+    }
+
     private fun readFileSafe(file: File): String {
+        if (file.extension.equals("docx", ignoreCase = true)) {
+            val docxText = extractDocxText(file)
+            if (docxText.isNotEmpty()) return docxText
+        }
+
         val encodings = listOf("UTF-8", "windows-1256", "ISO-8859-6", "US-ASCII")
         val bytes = file.readBytes()
 
