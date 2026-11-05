@@ -90,9 +90,9 @@ jobs:
         run: |
           echo "Uploading APK to GitHub Release v1.5.0..."
           gh release upload v1.5.0 release-apk/*.apk --clobber || {
-            echo "Release v1.5.0 may not exist, creating new release..."
+            echo "Release v1.5.0 upload failed, attempting create or fallback upload..."
             gh release create v1.5.0 release-apk/*.apk \
               --title "Gemini Audiobook TTS v1.5.0 (Android & Desktop Suite)" \
-              --notes-file docs/RELEASE_NOTES_v1.5.0.md \
-              --clobber
+              --notes-file docs/RELEASE_NOTES_v1.5.0.md || \
+            gh release upload v1.5.0 release-apk/*.apk
           }

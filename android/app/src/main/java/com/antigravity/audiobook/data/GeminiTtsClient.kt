@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import com.antigravity.audiobook.domain.DialogueTurnAnnotator
@@ -624,10 +625,11 @@ class GeminiTtsClient(
             .build()
 
         try {
-            httpClient.newCall(request).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Voice replication failed (${response.code}): $body")
+            val response: Response = httpClient.newCall(request).execute()
+            response.use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    Log.e(TAG, "Voice replication failed (${resp.code}): $body")
                     val errorDetail = try {
                         val errObj = JSONObject(body).optJSONObject("error")
                         errObj?.optString("message") ?: body
@@ -639,7 +641,7 @@ class GeminiTtsClient(
                             "فشل التحقق من الموافقة: يرجى التأكد من أن تسجيل الموافقة لنفس المتحدث وقراءة العبارة الإنجليزية بدقة."
                         body.contains("duration", ignoreCase = true) || body.contains("short", ignoreCase = true) ->
                             "عينة الصوت قصيرة جداً، يرجى تسجيل عينة لا تقل عن 10 ثوانٍ."
-                        else -> "فشل استنساخ الصوت (${response.code}): $errorDetail"
+                        else -> "فشل استنساخ الصوت (${resp.code}): $errorDetail"
                     }
                     throw IllegalStateException(msg)
                 }
@@ -709,14 +711,15 @@ class GeminiTtsClient(
             .build()
 
         try {
-            httpClient.newCall(request).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (!response.isSuccessful) {
-                    Log.w(TAG, "Failed to list custom voices (${response.code}): $body")
-                    return@withContext emptyList()
+            val response: Response = httpClient.newCall(request).execute()
+            response.use { resp ->
+                val body = resp.body?.string() ?: ""
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Failed to list custom voices (${resp.code}): $body")
+                    return@use emptyList<VoiceProfile>()
                 }
                 val json = JSONObject(body)
-                val voicesArray = json.optJSONArray("voices") ?: return@withContext emptyList()
+                val voicesArray = json.optJSONArray("voices") ?: return@use emptyList<VoiceProfile>()
                 val list = mutableListOf<VoiceProfile>()
                 for (i in 0 until voicesArray.length()) {
                     val v = voicesArray.getJSONObject(i)
@@ -743,7 +746,7 @@ class GeminiTtsClient(
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to list custom voices: ${e.message}")
-            emptyList()
+            emptyList<VoiceProfile>()
         }
     }
 
