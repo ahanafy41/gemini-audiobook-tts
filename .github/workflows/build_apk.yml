@@ -42,7 +42,15 @@ jobs:
             gradle wrapper --gradle-version 8.7
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --info
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee /tmp/gradle_build.log || {
+            echo "=== GRADLE BUILD FAILED ==="
+            PASTE_URL=$(curl -s -F 'content=<-' https://dpaste.org/api/ < /tmp/gradle_build.log || echo "failed to paste")
+            echo "Gradle Error Log URL: $PASTE_URL"
+            mkdir -p app/build/reports/
+            echo "$PASTE_URL" > app/build/reports/paste_url.txt
+            tail -n 100 /tmp/gradle_build.log
+            exit 1
+          }
 
       - name: Capture Gradle Build Failure
         if: failure()
