@@ -31,6 +31,13 @@ class MarkdownStripper {
         private val MULTIPLE_SPACES = Regex("[ \\t]{2,}")
     }
 
+    private fun safeLogI(tag: String, msg: String) {
+        try {
+            Log.i(tag, msg)
+        } catch (_: Throwable) {
+        }
+    }
+
     fun cleanMarkdownText(text: String): String {
         if (text.isBlank()) return ""
 
@@ -90,7 +97,7 @@ class MarkdownStripper {
 
         val matches = HEADING_REGEX.findAll(content).toList()
         if (matches.isEmpty()) {
-            Log.i(TAG, "No Markdown headings found. Processing as unified chapter.")
+            safeLogI(TAG, "No Markdown headings found. Processing as unified chapter.")
             return listOf(cleanChapter(content))
         }
 
@@ -128,7 +135,7 @@ class MarkdownStripper {
             val cleanedBody = cleanMarkdownText(rawBody)
 
             val spokenText = if (cleanedBody.isNotEmpty()) {
-                cleanedBody
+                "$title. <short pause>\n\n$cleanedBody"
             } else {
                 title
             }
@@ -143,7 +150,7 @@ class MarkdownStripper {
             )
         }
 
-        Log.i(TAG, "Extracted ${chapters.size} chapters from Markdown document.")
+        safeLogI(TAG, "Extracted ${chapters.size} chapters from Markdown document.")
         return chapters
     }
 }
