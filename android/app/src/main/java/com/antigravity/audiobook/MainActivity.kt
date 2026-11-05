@@ -1439,28 +1439,6 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         }
     }
 
-        announceStatus("جارِ فحص الاتصال بمفتاح Gemini API...")
-        lifecycleScope.launch {
-            try {
-                val client = GeminiTtsClient(apiKey = apiKey)
-                val testAudio = withContext(Dispatchers.IO) {
-                    client.synthesize("فحص الاتصال ناجح، المفتاح يعمل بكفاءة.", voiceName = "Charon")
-                }
-                if (testAudio.size > 1000) {
-                    val previewFile = File(cacheDir, "test_conn.wav")
-                    client.saveAudioAtomically(previewFile, testAudio)
-                    playAudioFileDirectly(previewFile)
-                    announceStatus("الاتصال ناجح تماماً! المفتاح صالح ومستعد لتوليد الكتب الصوتية.")
-                    Toast.makeText(this@MainActivity, "الاتصال ناجح ومفتاحك فعال 100%", Toast.LENGTH_LONG).show()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "API Connection test failed: ${e.message}")
-                announceStatus("فشل فحص الاتصال: ${e.localizedMessage ?: e.message}")
-                Toast.makeText(this@MainActivity, "خطأ في المفتاح: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
     private fun showModelSelectionDialog() {
         val models = arrayOf("gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts")
         val currentModel = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
