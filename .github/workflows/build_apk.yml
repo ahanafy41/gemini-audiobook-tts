@@ -84,36 +84,15 @@ jobs:
           retention-days: 14
 
       - name: Automatic Release with APK
-        uses: softprops/action-gh-release@v2
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-        with:
-          files: release-apk/*.apk
-          tag_name: "v1.5.0"
-          name: "Gemini Audiobook TTS v1.5.0 (Android & Desktop Suite)"
-          fail_on_unmatched_files: true
-          body: |
-            ### 🚀 تطبيق Gemini Audiobook TTS - التحديث الشامل v1.5.0 (الموبايل وسطح المكتب)
-
-            - **جناح ديسكتوب متكامل للكمبيوتر (Desktop App Suite)**:
-              - تطبيق كامل بنظام Hub مبني بـ wxPython متوافق 100% مع قارئ الشاشة NVDA ومستخدمي الكمبيوتر.
-              - تشفير محلي للمفاتيح عبر Windows DPAPI لحمايتها من التسريب.
-              - ملف تشغيل مباشر `run_desktop.bat` وإدارة كاملة للأصوات والكتب.
-
-            - **إدارة حصص المفاتيح الدائمة وتدوير الـ 429 (Persistent Key Quota Manager)**:
-              - دعم قائمة مفاتيح غير محدودة مع تدوير فوري وتلقائي عند أخطاء 429.
-              - استخراج `retryDelay` وحساب موعد تصفير كوتا جوجل الرسمي (منتصف الليل بتوقيت المحيط الهادئ Pacific Midnight).
-              - استئناف المفاتيح المستنفدة تلقائياً فور انتهاء موعد الحظر.
-
-            - **محرك الحوار المتقدم وأفعال القول (Inquit & Emotion Engine)**:
-              - فصل أفعال القول (Inquit verbs) تلقائياً بين الراوي والشخصيات بست لغات.
-              - استنتاج المشاعر من سياق السرد العربي (همس، غضب، بكاء، هدوء...) وتوجيه نبرة الصوت آلياً.
-
-            - **نطق عناوين الفصول ودعم ملفات Word (.docx)**:
-              - نطق عنوان الفصل صوتياً مع وقفة قصيرة قبل بدء قراءة الفصل.
-              - دعم استيراد ملفات Microsoft Word (.docx) مباشرة وبدون أي مكاتب خارجية.
-              - توسيع أنماط التقاط الفصول بالأرقام والمصطلحات التراثية.
-
-            - **تصدير ملفات الفهرسة وقوائم التشغيل (CUE Sheet & M3U)**:
-              - توليد ملفات `book.cue` و `playlist.m3u` تلقائياً لتشغيل الفصول المقسمة على مشغلات الصوت الاحترافية.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Uploading APK to GitHub Release v1.5.0..."
+          gh release upload v1.5.0 release-apk/*.apk --clobber || {
+            echo "Release v1.5.0 may not exist, creating new release..."
+            gh release create v1.5.0 release-apk/*.apk \
+              --title "Gemini Audiobook TTS v1.5.0 (Android & Desktop Suite)" \
+              --notes-file docs/RELEASE_NOTES_v1.5.0.md \
+              --clobber
+          }
