@@ -42,7 +42,25 @@ jobs:
             gradle wrapper --gradle-version 8.7
           fi
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --info
+
+      - name: Capture Gradle Build Failure
+        if: failure()
+        working-directory: android
+        run: |
+          echo "=== GRADLE FAILURE DIAGNOSTICS ==="
+          find . -name "*.txt" -o -name "*.log" | grep -E "build|report" | head -n 30
+          find app/build/reports -type f -exec head -n 50 {} + 2>/dev/null || true
+
+      - name: Upload Failure Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-failure-reports
+          path: |
+            android/app/build/reports/
+            android/app/build/outputs/logs/
+          retention-days: 2
 
       - name: Upload Debug APK to Artifacts
         uses: actions/upload-artifact@v4
