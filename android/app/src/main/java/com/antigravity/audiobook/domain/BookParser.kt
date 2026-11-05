@@ -361,90 +361,6 @@ class BookParser(
         return result.toString().trim()
     }
 
-    private fun parseDocxWithStax(stream: InputStream): String {
-        val factory = javax.xml.stream.XMLInputFactory.newInstance()
-        try {
-            factory.setProperty(javax.xml.stream.XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false)
-            factory.setProperty(javax.xml.stream.XMLInputFactory.SUPPORT_DTD, false)
-        } catch (_: Throwable) {}
-        val reader = factory.createXMLStreamReader(stream, "UTF-8")
-
-        val result = StringBuilder()
-        val currentPara = StringBuilder()
-        var inText = false
-        var preserveSpace = false
-        var headingPrefix = ""
-
-        while (reader.hasNext()) {
-            val event = reader.next()
-            when (event) {
-                javax.xml.stream.XMLStreamConstants.START_ELEMENT -> {
-                    val localName = reader.localName ?: ""
-                    when (localName) {
-                        "p" -> {
-                            currentPara.setLength(0)
-                            headingPrefix = ""
-                        }
-                        "pStyle" -> {
-                            val styleVal = (0 until reader.attributeCount)
-                                .firstOrNull { reader.getAttributeLocalName(it).equals("val", ignoreCase = true) }
-                                ?.let { reader.getAttributeValue(it) } ?: ""
-                            if (styleVal.startsWith("heading", ignoreCase = true)) {
-                                val level = Regex("\\d+").find(styleVal)?.value?.toIntOrNull() ?: 1
-                                val hashes = "#".repeat(level.coerceIn(1, 6))
-                                headingPrefix = "$hashes "
-                            }
-                        }
-                        "t" -> {
-                            inText = true
-                            val spaceVal = (0 until reader.attributeCount)
-                                .firstOrNull { reader.getAttributeLocalName(it).equals("space", ignoreCase = true) }
-                                ?.let { reader.getAttributeValue(it) } ?: ""
-                            preserveSpace = spaceVal.equals("preserve", ignoreCase = true)
-                        }
-                        "br" -> {
-                            currentPara.append("\n")
-                        }
-                        "tab" -> {
-                            currentPara.append(" ")
-                        }
-                    }
-                }
-                javax.xml.stream.XMLStreamConstants.CHARACTERS,
-                javax.xml.stream.XMLStreamConstants.CDATA -> {
-                    if (inText) {
-                        val text = reader.text
-                        if (text != null) {
-                            currentPara.append(text)
-                        }
-                    }
-                }
-                javax.xml.stream.XMLStreamConstants.END_ELEMENT -> {
-                    val localName = reader.localName ?: ""
-                    when (localName) {
-                        "t" -> {
-                            inText = false
-                            preserveSpace = false
-                        }
-                        "p" -> {
-                            val trimmed = currentPara.toString().trim()
-                            if (trimmed.isNotEmpty()) {
-                                if (headingPrefix.isNotEmpty()) {
-                                    result.append(headingPrefix).append(trimmed).append("\n\n")
-                                } else {
-                                    result.append(trimmed).append("\n\n")
-                                }
-                            }
-                            currentPara.setLength(0)
-                            headingPrefix = ""
-                        }
-                    }
-                }
-            }
-        }
-        return result.toString().trim()
-    }
-
     fun extractDocxText(file: File): String {
         if (!file.exists() || !file.isFile || file.length() == 0L) {
             return ""
@@ -453,16 +369,9 @@ class BookParser(
             val entry = zip.getEntry("word/document.xml")
                 ?: throw IllegalArgumentException("ملف docx غير صالح: لا يحتوي على word/document.xml")
 
-            try {
-                val parser = createPullParser()
-                zip.getInputStream(entry).use { stream ->
-                    parseDocxWithPullParser(parser, stream)
-                }
-            } catch (e: Throwable) {
-                safeLogW(TAG, "XmlPullParser failed (${e.message}), attempting StAX streaming fallback.")
-                zip.getInputStream(entry).use { stream ->
-                    parseDocxWithStax(stream)
-                }
+            val parser = createPullParser()
+            zip.getInputStream(entry).use { stream ->
+                parseDocxWithPullParser(parser, stream)
             }
         }
     }
