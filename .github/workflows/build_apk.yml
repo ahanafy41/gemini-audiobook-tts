@@ -70,20 +70,27 @@ jobs:
             android/app/build/outputs/logs/
           retention-days: 2
 
+      - name: Locate and Stage Built APK
+        run: |
+          mkdir -p release-apk
+          find android -name "*.apk" -exec cp -v {} release-apk/ \;
+          ls -la release-apk/
+
       - name: Upload Debug APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: GeminiAudiobook-Debug-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: release-apk/*.apk
           retention-days: 14
 
       - name: Automatic Release with APK
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          files: android/app/build/outputs/apk/debug/*.apk
+          files: release-apk/*.apk
           tag_name: "v1.5.0"
           name: "Gemini Audiobook TTS v1.5.0 (Android & Desktop Suite)"
+          fail_on_unmatched_files: true
           body: |
             ### 🚀 تطبيق Gemini Audiobook TTS - التحديث الشامل v1.5.0 (الموبايل وسطح المكتب)
 
