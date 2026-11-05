@@ -5,6 +5,8 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.ZoneId
@@ -23,7 +25,10 @@ class KeyQuotaManager(private val storageDir: File) {
     companion object {
         private const val TAG = "KeyQuotaManager"
         const val DEFAULT_FILENAME = "key_quotas.json"
+        const val DEFAULT_TRANSIENT_RETRY_DELAY = 60L
+        val PACIFIC_ZONE: ZoneId = ZoneId.of("America/Los_Angeles")
 
+        @Deprecated("Artificial cap removed; Google Cloud server enforces quota limits via 429")
         val MODEL_DAILY_CAPS = mapOf(
             "gemini-3.8-flash-tts" to 100,
             "gemini-3.8-flash-lite-tts" to 100,
@@ -31,6 +36,7 @@ class KeyQuotaManager(private val storageDir: File) {
             "gemini-2.5-flash-preview-tts" to 10,
             "gemini-2.5-pro-preview-tts" to 10
         )
+        @Deprecated("Artificial cap removed; Google Cloud server enforces quota limits via 429")
         const val DEFAULT_DAILY_CAP = 10
 
         fun computeKeyId(apiKey: String): String {
@@ -54,6 +60,7 @@ class KeyQuotaManager(private val storageDir: File) {
             }
         }
 
+        @Deprecated("Artificial cap removed; returns default cap for informational purposes")
         fun getModelDailyCap(modelId: String): Int {
             for ((knownModel, cap) in MODEL_DAILY_CAPS) {
                 if (modelId.contains(knownModel)) {
@@ -63,11 +70,18 @@ class KeyQuotaManager(private val storageDir: File) {
             return DEFAULT_DAILY_CAP
         }
 
+        fun getPacificDateString(zonedDateTime: ZonedDateTime = ZonedDateTime.now(PACIFIC_ZONE)): String {
+            return try {
+                zonedDateTime.toLocalDate().toString()
+            } catch (e: Exception) {
+                ""
+            }
+        }
+
         fun getSecondsUntilPacificMidnight(): Long {
             return try {
-                val pacificZone = ZoneId.of("America/Los_Angeles")
-                val nowPacific = ZonedDateTime.now(pacificZone)
-                val midnightPacific = nowPacific.toLocalDate().plusDays(1).atStartOfDay(pacificZone)
+                val nowPacific = ZonedDateTime.now(PACIFIC_ZONE)
+                val midnightPacific = nowPacific.toLocalDate().plusDays(1).atStartOfDay(PACIFIC_ZONE)
                 val seconds = Duration.between(nowPacific, midnightPacific).seconds
                 seconds.coerceAtLeast(60L)
             } catch (e: Exception) {
@@ -145,6 +159,27 @@ class KeyQuotaManager(private val storageDir: File) {
         load()
     }
 
+    private fun safeLogI(tag: String, msg: String) {
+        try {
+            Log.i(tag, msg)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun safeLogW(tag: String, msg: String) {
+        try {
+            Log.w(tag, msg)
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun safeLogE(tag: String, msg: String) {
+        try {
+            Log.e(tag, msg)
+        } catch (_: Throwable) {
+        }
+    }
+
     fun load() {
         synchronized(lock) {
             if (!storageFile.exists() || storageFile.length() == 0L) {
@@ -154,7 +189,7 @@ class KeyQuotaManager(private val storageDir: File) {
                 val content = storageFile.readText(StandardCharsets.UTF_8)
                 data = JSONObject(content)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to load key_quotas.json: ${e.message}. Starting fresh.")
+                safeLogW(TAG, "Failed to load key_quotas.json: ${e.message}. Starting fresh.")
                 data = JSONObject().apply {
                     put("version", 1)
                     put("last_updated", System.currentTimeMillis() / 1000)
@@ -166,21 +201,44 @@ class KeyQuotaManager(private val storageDir: File) {
 
     fun save() {
         synchronized(lock) {
+            var tempFile: File? = null
             try {
                 data.put("last_updated", System.currentTimeMillis() / 1000)
                 storageDir.mkdirs()
-                val tempFile = File(storageDir, "$DEFAULT_FILENAME.tmp")
+                tempFile = File.createTempFile("key_quotas_", ".tmp", storageDir)
                 FileOutputStream(tempFile).use { fos ->
                     fos.write(data.toString(2).toByteArray(StandardCharsets.UTF_8))
                     fos.flush()
+                    try {
+                        fos.fd.sync()
+                    } catch (_: Exception) {}
                 }
-                if (!tempFile.renameTo(storageFile)) {
-                    // Fallback on some Android filesystems
-                    storageFile.delete()
-                    tempFile.renameTo(storageFile)
+
+                try {
+                    Files.move(
+                        tempFile.toPath(),
+                        storageFile.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING
+                    )
+                } catch (e: Exception) {
+                    // Fallback on filesystems that do not support ATOMIC_MOVE
+                    if (storageFile.exists()) {
+                        storageFile.delete()
+                    }
+                    if (!tempFile.renameTo(storageFile)) {
+                        tempFile.copyTo(storageFile, overwrite = true)
+                        tempFile.delete()
+                    }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to atomic-save key_quotas.json: ${e.message}")
+                safeLogE(TAG, "Failed to atomic-save key_quotas.json: ${e.message}")
+            } finally {
+                tempFile?.let {
+                    if (it.exists()) {
+                        it.delete()
+                    }
+                }
             }
         }
     }
@@ -205,18 +263,29 @@ class KeyQuotaManager(private val storageDir: File) {
 
         val modelsObj = keyRecord.optJSONObject("models") ?: JSONObject().also { keyRecord.put("models", it) }
         var modelRecord = modelsObj.optJSONObject(modelId)
+        val todayPacific = getPacificDateString()
+
         if (modelRecord == null) {
             if (!create) return null
             modelRecord = JSONObject().apply {
                 put("status", "AVAILABLE")
                 put("requests_today", 0)
-                put("daily_cap", getModelDailyCap(modelId))
+                put("last_request_date", todayPacific)
                 put("resets_at", 0L)
                 put("last_success_at", 0L)
                 put("last_429_at", 0L)
                 put("last_error", "")
             }
             modelsObj.put(modelId, modelRecord)
+        } else {
+            // Check if day changed in Pacific time
+            val lastDate = modelRecord.optString("last_request_date", "")
+            if (lastDate.isNotEmpty() && lastDate != todayPacific) {
+                modelRecord.put("requests_today", 0)
+                modelRecord.put("last_request_date", todayPacific)
+            } else if (lastDate.isEmpty()) {
+                modelRecord.put("last_request_date", todayPacific)
+            }
         }
 
         return modelRecord
@@ -227,30 +296,41 @@ class KeyQuotaManager(private val storageDir: File) {
         if (cleanKey.isEmpty()) return false
 
         synchronized(lock) {
-            val rec = getModelRecord(cleanKey, modelId, create = false) ?: return true // مفتاح جديد لم يُستخدم
+            val rec = getModelRecord(cleanKey, modelId, create = false) ?: return true // New key is available
 
             val now = System.currentTimeMillis() / 1000
             val resetsAt = rec.optLong("resets_at", 0L)
             val status = rec.optString("status", "AVAILABLE")
 
+            val todayPacific = getPacificDateString()
+            val lastDate = rec.optString("last_request_date", "")
+            var changed = false
+            if (lastDate.isNotEmpty() && lastDate != todayPacific) {
+                rec.put("requests_today", 0)
+                rec.put("last_request_date", todayPacific)
+                changed = true
+            }
+
             if (status == "EXHAUSTED") {
                 if (resetsAt > 0 && now >= resetsAt) {
-                    Log.i(TAG, "Quota renewed for key ${maskKey(cleanKey)} on $modelId (resets_at passed).")
+                    safeLogI(TAG, "Quota renewed for key ${maskKey(cleanKey)} on $modelId (resets_at passed).")
                     rec.put("status", "AVAILABLE")
                     rec.put("requests_today", 0)
                     rec.put("resets_at", 0L)
                     save()
                     return true
                 }
+                if (changed) {
+                    save()
+                }
                 return false
             }
 
-            val dailyCap = rec.optInt("daily_cap", getModelDailyCap(modelId))
-            val requestsToday = rec.optInt("requests_today", 0)
-            if (requestsToday >= dailyCap) {
-                return false
+            if (changed) {
+                save()
             }
 
+            // No artificial client-side cap blocking; paid accounts can use higher quotas.
             return true
         }
     }
@@ -261,19 +341,19 @@ class KeyQuotaManager(private val storageDir: File) {
 
         synchronized(lock) {
             val rec = getModelRecord(cleanKey, modelId, create = true) ?: return
+
+            val todayPacific = getPacificDateString()
+            val lastDate = rec.optString("last_request_date", "")
+            if (lastDate.isNotEmpty() && lastDate != todayPacific) {
+                rec.put("requests_today", 0)
+            }
+            rec.put("last_request_date", todayPacific)
+
             val reqToday = rec.optInt("requests_today", 0) + 1
             rec.put("requests_today", reqToday)
             rec.put("last_success_at", System.currentTimeMillis() / 1000)
             rec.put("status", "AVAILABLE")
-
-            val dailyCap = rec.optInt("daily_cap", getModelDailyCap(modelId))
-            if (reqToday >= dailyCap) {
-                val delaySec = getSecondsUntilPacificMidnight()
-                val resetsAt = (System.currentTimeMillis() / 1000) + delaySec
-                rec.put("status", "EXHAUSTED")
-                rec.put("resets_at", resetsAt)
-                Log.i(TAG, "Key ${maskKey(cleanKey)} reached daily cap ($dailyCap reqs) on $modelId. Reset in ${delaySec}s.")
-            }
+            // No client-side artificial exhaustion cap. Server 429 governs quota.
             save()
         }
     }
@@ -290,7 +370,16 @@ class KeyQuotaManager(private val storageDir: File) {
         synchronized(lock) {
             val rec = getModelRecord(cleanKey, modelId, create = true) ?: return 0L
             val now = System.currentTimeMillis() / 1000
-            val delay = retryDelaySeconds ?: getSecondsUntilPacificMidnight()
+
+            val isQuotaExhausted = errorMessage.contains("quota", ignoreCase = true) ||
+                errorMessage.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                errorMessage.contains("limit", ignoreCase = true)
+
+            val delay = when {
+                retryDelaySeconds != null -> retryDelaySeconds
+                isQuotaExhausted -> getSecondsUntilPacificMidnight()
+                else -> DEFAULT_TRANSIENT_RETRY_DELAY
+            }
             val resetsAt = now + delay
 
             rec.put("status", "EXHAUSTED")
@@ -299,7 +388,7 @@ class KeyQuotaManager(private val storageDir: File) {
             rec.put("last_error", errorMessage.take(300))
             save()
 
-            Log.i(TAG, "Recorded 429 exhaustion for ${maskKey(cleanKey)} on $modelId. Resets in ${delay}s.")
+            safeLogI(TAG, "Recorded 429 exhaustion for ${maskKey(cleanKey)} on $modelId. Resets in ${delay}s.")
             return resetsAt
         }
     }
@@ -338,12 +427,45 @@ class KeyQuotaManager(private val storageDir: File) {
     }
 
     fun getNextAvailableKey(apiKeys: List<String>, currentIndex: Int, modelId: String): Pair<Int, String?> {
-        for (idx in (currentIndex + 1) until apiKeys.size) {
+        if (apiKeys.isEmpty()) return Pair(-1, null)
+        if (currentIndex !in apiKeys.indices) {
+            for (idx in apiKeys.indices) {
+                if (isKeyAvailable(apiKeys[idx], modelId)) {
+                    return Pair(idx, apiKeys[idx])
+                }
+            }
+            return Pair(-1, null)
+        }
+        for (i in 1 until apiKeys.size) {
+            val idx = (currentIndex + i) % apiKeys.size
             if (isKeyAvailable(apiKeys[idx], modelId)) {
                 return Pair(idx, apiKeys[idx])
             }
         }
         return Pair(-1, null)
+    }
+
+    fun getRequestsToday(apiKey: String, modelId: String): Int {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isEmpty()) return 0
+        synchronized(lock) {
+            val rec = getModelRecord(cleanKey, modelId, create = false) ?: return 0
+            val todayPacific = getPacificDateString()
+            val lastDate = rec.optString("last_request_date", "")
+            if (lastDate.isNotEmpty() && lastDate != todayPacific) {
+                return 0
+            }
+            return rec.optInt("requests_today", 0)
+        }
+    }
+
+    fun getLastRequestDate(apiKey: String, modelId: String): String {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isEmpty()) return ""
+        synchronized(lock) {
+            val rec = getModelRecord(cleanKey, modelId, create = false) ?: return ""
+            return rec.optString("last_request_date", "")
+        }
     }
 
     fun getEarliestRenewalTime(apiKeys: List<String>, modelId: String): Pair<Long, String> {
