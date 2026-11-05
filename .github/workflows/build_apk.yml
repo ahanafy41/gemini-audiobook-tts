@@ -37,6 +37,7 @@ jobs:
       - name: Build Debug APK with Gradle
         working-directory: android
         run: |
+          set -o pipefail
           if [ ! -f "gradlew" ]; then
             echo "Generating Gradle wrapper..."
             gradle wrapper --gradle-version 8.7

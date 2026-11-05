@@ -235,6 +235,11 @@ class GeminiTtsClient(
     }
 
     private val httpClient = OkHttpClient.Builder()
+        .dns(ResilientDns())
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     suspend fun synthesize(
         text: String,
@@ -341,7 +346,7 @@ class GeminiTtsClient(
                 .build()
 
             try {
-                httpClient.newCall(request).execute().use { response ->
+                val audioResult: ByteArray? = httpClient.newCall(request).execute().use { response ->
                     if (response.code == 429) {
                         val errorBody = response.body?.string() ?: ""
                         Log.w(TAG, "Gemini HTTP 429 Rate Limit on key ${KeyQuotaManager.maskKey(currentKey)}: $errorBody")
@@ -353,7 +358,7 @@ class GeminiTtsClient(
                             Log.i(TAG, "Rotating to next ready key: ${KeyQuotaManager.maskKey(nextKey)}")
                             activeKeyIndex = nextIdx
                             lastError = QuotaExceededException("Rate limit 429")
-                            return@use
+                            return@use null
                         } else {
                             val (_, renewalMsg) = quotaManager?.getEarliestRenewalTime(apiKeys, modelId) ?: Pair(0L, "غير محدد")
                             throw QuotaExceededException("جميع مفاتيح API مستنفدة الحصة. أقرب موعد للتجديد بعد: $renewalMsg.")
@@ -374,7 +379,7 @@ class GeminiTtsClient(
                     val json = JSONObject(responseStr)
                     val rawAudio = extractAudioBytes(json)
                     val parsed = extractPcmData(rawAudio)
-                    return@withContext if (parsed != null) {
+                    if (parsed != null) {
                         createWavHeader(
                             parsed.pcm,
                             sampleRate = parsed.sampleRate,
@@ -391,6 +396,10 @@ class GeminiTtsClient(
                     } else {
                         createWavHeader(rawAudio, sampleRate = 24000)
                     }
+                }
+
+                if (audioResult != null) {
+                    return@withContext audioResult
                 }
             } catch (qee: QuotaExceededException) {
                 lastError = qee
