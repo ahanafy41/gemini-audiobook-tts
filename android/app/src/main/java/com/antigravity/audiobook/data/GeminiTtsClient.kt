@@ -64,6 +64,8 @@ class GeminiTtsClient(
     )
 
     private var activeKeyIndex = 0
+    private val keyLastRequestTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    var strictPacingSeconds: Long = 60L // Mandatory 60s pacing per API key to guarantee zero 429 quota hits
 
     fun setApiKeys(keys: List<String>) {
         this.apiKeys = keys.map { it.trim() }.filter { it.isNotEmpty() }
@@ -247,6 +249,28 @@ class GeminiTtsClient(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    fun recordKeyRequestTime(apiKey: String) {
+        if (apiKey.isNotBlank()) {
+            keyLastRequestTime[apiKey.trim()] = System.currentTimeMillis()
+        }
+    }
+
+    private suspend fun enforceKeyPacing(apiKey: String) {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank() || strictPacingSeconds <= 0) return
+
+        val lastTime = keyLastRequestTime[cleanKey] ?: return
+        val elapsed = System.currentTimeMillis() - lastTime
+        val requiredIntervalMs = strictPacingSeconds * 1000L
+        val remainingMs = requiredIntervalMs - elapsed
+
+        if (remainingMs > 0) {
+            val waitSec = (remainingMs + 999) / 1000
+            Log.i(TAG, "Rate-limit pacing: Waiting ${waitSec}s to complete the 60s window for key ${KeyQuotaManager.maskKey(cleanKey)}...")
+            delay(remainingMs)
+        }
+    }
+
     suspend fun synthesize(
         text: String,
         voiceName: String = "Charon",
@@ -344,6 +368,7 @@ class GeminiTtsClient(
 
         for (attempt in 0 until totalAttempts) {
             val currentKey = getActiveApiKey()
+            enforceKeyPacing(currentKey)
             val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$currentKey"
 
             val request = Request.Builder()
@@ -382,6 +407,7 @@ class GeminiTtsClient(
 
                     // Success: Record quota success
                     quotaManager?.recordSuccess(currentKey, modelId)
+                    recordKeyRequestTime(currentKey)
                     val responseStr = response.body?.string() ?: ""
                     val json = JSONObject(responseStr)
                     val rawAudio = extractAudioBytes(json)

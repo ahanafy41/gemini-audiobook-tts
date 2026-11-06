@@ -134,6 +134,7 @@ class AudiobookEngine(
                 val chunkFilename = String.format("%s_part_%03d.wav", chapterKey, cIdx + 1)
                 val chunkFile = File(rawChunksDir, chunkFilename)
                 var synthesizedNetwork = false
+                val chunkStartTime = System.currentTimeMillis()
 
                 if (!chunkFile.exists() || chunkFile.length() <= 1000) {
                     if (!ttsClient.hasApiKey()) {
@@ -151,10 +152,13 @@ class AudiobookEngine(
                 }
                 chunkFiles.add(chunkFile)
 
-                // 5s pacing delay between network synthesis requests to maintain healthy RPM quota
+                // Strict 60s pacing window: Wait for the remainder of the full minute to guarantee zero RPM quota exhaustion
                 if (synthesizedNetwork && (cIdx < textChunks.size - 1 || i < parsedBook.chapters.size - 1)) {
-                    Log.i(TAG, "Pacing delay (5s) between Gemini TTS requests to maintain healthy RPM quota...")
-                    delay(5000L)
+                    val chunkElapsedMs = System.currentTimeMillis() - chunkStartTime
+                    val remainingMinuteMs = (60_000L - chunkElapsedMs).coerceIn(5_000L, 60_000L)
+                    val remainingSec = (remainingMinuteMs + 999) / 1000
+                    Log.i(TAG, "Rate-limit pacing: Chunk synthesized in ${chunkElapsedMs / 1000}s. Waiting remaining ${remainingSec}s to complete the full 60s minute window before next request...")
+                    delay(remainingMinuteMs)
                 }
             }
 
