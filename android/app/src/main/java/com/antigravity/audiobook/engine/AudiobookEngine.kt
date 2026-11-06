@@ -3,6 +3,7 @@ package com.antigravity.audiobook.engine
 import android.content.Context
 import android.util.Log
 import com.antigravity.audiobook.data.GeminiTtsClient
+import com.antigravity.audiobook.data.QuotaExceededException
 import com.antigravity.audiobook.domain.BookParser
 import com.antigravity.audiobook.domain.CleanedChapter
 import com.antigravity.audiobook.domain.MultiSpeakerConfig
