@@ -89,11 +89,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Uploading APK to GitHub Release v1.5.0..."
-          gh release upload v1.5.0 release-apk/*.apk --clobber || {
-            echo "Release v1.5.0 upload failed, attempting create or fallback upload..."
-            gh release create v1.5.0 release-apk/*.apk \
-              --title "Gemini Audiobook TTS v1.5.0 (Android & Desktop Suite)" \
-              --notes-file docs/RELEASE_NOTES_v1.5.0.md || \
-            gh release upload v1.5.0 release-apk/*.apk
+          APP_VERSION="v1.5.1"
+          echo "Uploading APK to GitHub Release ${APP_VERSION}..."
+          gh release upload ${APP_VERSION} release-apk/*.apk --clobber || {
+            echo "Release ${APP_VERSION} upload failed, attempting create or fallback upload..."
+            gh release create ${APP_VERSION} release-apk/*.apk \
+              --title "Gemini Audiobook TTS ${APP_VERSION} (Android & Desktop Suite)" \
+              --notes-file docs/RELEASE_NOTES_v1.5.1.md || \
+            gh release upload ${APP_VERSION} release-apk/*.apk
           }
