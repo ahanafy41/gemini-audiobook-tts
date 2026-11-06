@@ -41,7 +41,7 @@ class AudiobookEngine(
     }
 
     private val bookParser = BookParser()
-    private val chunker = SmartTextChunker(8000)
+    private val chunker = SmartTextChunker(3800)
     private val progressFile = File(outputDir, "progress.json")
     private val manifestFile = File(outputDir, "book_manifest.json")
 
@@ -140,20 +140,8 @@ class AudiobookEngine(
                     }
 
                     try {
-                        val audioData = ttsClient.synthesize(
-                            text = chunkText,
-                            voiceName = voiceName,
-                            stylePreset = stylePreset,
-                            multiSpeakerConfig = multiSpeakerConfig,
-                            customInstructions = customInstructions
-                        )
-                        if (audioData.size > 1000) {
-                            ttsClient.saveAudioAtomically(chunkFile, audioData)
-                            synthesizedNetwork = true
-                            Log.i(TAG, "Synthesized chunk ${cIdx + 1} via Gemini AI TTS (${audioData.size} bytes).")
-                        } else {
-                            throw IllegalStateException("استجابة الصوت غير مكتملة.")
-                        }
+                        synthesizedNetwork = synthesizeChunkWithAdaptiveFallback(chunkText, chunkFile, rawChunksDir)
+                        Log.i(TAG, "Synthesized chunk ${cIdx + 1} via Gemini AI TTS (${chunkFile.length()} bytes).")
                     } catch (e: Exception) {
                         Log.e(TAG, "Gemini AI synthesis failed for chunk ${cIdx + 1}: ${e.message}")
                         markManifestPaused(parsedBook.title, parsedBook.chapters.size, chaptersArray)
@@ -367,5 +355,80 @@ class AudiobookEngine(
             }
         }
         return output
+    }
+
+    private suspend fun synthesizeChunkWithAdaptiveFallback(
+        chunkText: String,
+        chunkFile: File,
+        rawChunksDir: File
+    ): Boolean {
+        // 1. First attempt: standard synthesis
+        try {
+            val audioData = ttsClient.synthesize(
+                text = chunkText,
+                voiceName = voiceName,
+                stylePreset = stylePreset,
+                multiSpeakerConfig = multiSpeakerConfig,
+                customInstructions = customInstructions
+            )
+            if (audioData.size > 1000) {
+                ttsClient.saveAudioAtomically(chunkFile, audioData)
+                return true
+            }
+        } catch (e: Exception) {
+            if (e is QuotaExceededException || e.message?.contains("SAFETY") == true) {
+                throw e
+            }
+            Log.w(TAG, "Standard chunk synthesis attempt encountered transient issue: ${e.message}. Triggering resilience fallback...")
+        }
+
+        // 2. Adaptive Bisection Fallback: Split large chunk into two sub-parts if >= 400 chars
+        if (chunkText.length >= 400) {
+            val subChunker = SmartTextChunker((chunkText.length / 2) + 50)
+            val subParts = subChunker.chunkText(chunkText)
+            if (subParts.size >= 2) {
+                Log.i(TAG, "Bisecting stubborn chunk of ${chunkText.length} chars into ${subParts.size} parts for maximum stability.")
+                val subFiles = mutableListOf<File>()
+                try {
+                    for (sIdx in subParts.indices) {
+                        val subText = subParts[sIdx]
+                        val subFile = File(rawChunksDir, "${chunkFile.nameWithoutExtension}_sub_${sIdx + 1}.wav")
+                        val subAudio = ttsClient.synthesize(
+                            text = subText,
+                            voiceName = voiceName,
+                            stylePreset = stylePreset,
+                            multiSpeakerConfig = multiSpeakerConfig,
+                            customInstructions = customInstructions
+                        )
+                        if (subAudio.size > 1000) {
+                            ttsClient.saveAudioAtomically(subFile, subAudio)
+                            subFiles.add(subFile)
+                        } else {
+                            throw IllegalStateException("استجابة الصوت للقطعة المصغرة غير مكتملة.")
+                        }
+                        delay(2000L)
+                    }
+                    concatenateWavs(subFiles, chunkFile)
+                    return true
+                } finally {
+                    subFiles.forEach { it.delete() }
+                }
+            }
+        }
+
+        // 3. Final single attempt after delay
+        delay(3000L)
+        val finalAudio = ttsClient.synthesize(
+            text = chunkText,
+            voiceName = voiceName,
+            stylePreset = stylePreset,
+            multiSpeakerConfig = multiSpeakerConfig,
+            customInstructions = customInstructions
+        )
+        if (finalAudio.size > 1000) {
+            ttsClient.saveAudioAtomically(chunkFile, finalAudio)
+            return true
+        }
+        throw IllegalStateException("فشل توليد الصوت للمقطع بعد كافة محاولات التعافي والانقسام التكيفي.")
     }
 }

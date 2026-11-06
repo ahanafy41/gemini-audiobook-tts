@@ -34,6 +34,12 @@ import kotlin.math.sin
 class QuotaExceededException(message: String) : Exception(message)
 
 /**
+ * Exception thrown for transient / retryable Gemini TTS errors (HTTP 5xx, finishReason OTHER, stream drops).
+ * Allows the client to retry with exponential backoff or rotate to alternate keys.
+ */
+class TransientTtsException(message: String) : Exception(message)
+
+/**
  * Gemini 3.8 Flash TTS Client for Android.
  * Communicates with Google's Gemini TTS endpoint using OkHttp,
  * supports style presets, multi-speaker dialogue, and custom Voice Design IDs.
@@ -332,7 +338,8 @@ class GeminiTtsClient(
         payload.put("generationConfig", generationConfig)
 
         val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
-        val totalAttempts = apiKeys.size.coerceAtLeast(1)
+        val maxRetriesPerKey = 2
+        val totalAttempts = (apiKeys.size.coerceAtLeast(1)) * maxRetriesPerKey
         var lastError: Exception? = null
 
         for (attempt in 0 until totalAttempts) {
@@ -366,7 +373,7 @@ class GeminiTtsClient(
                     } else if (response.code in 500..599) {
                         val errorBody = response.body?.string() ?: ""
                         Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
-                        throw IllegalStateException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
+                        throw TransientTtsException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
                     } else if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: ""
                         Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
@@ -407,13 +414,27 @@ class GeminiTtsClient(
                 if (nextIdx == -1) {
                     throw qee
                 }
+            } catch (tte: TransientTtsException) {
+                lastError = tte
+                Log.w(TAG, "Transient TTS error on attempt ${attempt + 1}/$totalAttempts: ${tte.message}")
+                val (nextIdx, nextKey) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                if (nextIdx != -1 && nextKey != null && apiKeys.size > 1) {
+                    Log.i(TAG, "Failing over to alternate key: ${KeyQuotaManager.maskKey(nextKey)}")
+                    activeKeyIndex = nextIdx
+                }
+                delay(1500L * ((attempt % 3) + 1))
             } catch (ioe: IOException) {
-                Log.w(TAG, "Network connection error: ${ioe.message}")
-                throw IOException("تعذر الاتصال بخادم الصوت بسبب عدم استقرار الإنترنت: ${ioe.localizedMessage ?: ioe.message}")
+                lastError = ioe
+                Log.w(TAG, "Network connection error on attempt ${attempt + 1}/$totalAttempts: ${ioe.message}")
+                val (nextIdx, nextKey) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                if (nextIdx != -1 && nextKey != null && apiKeys.size > 1) {
+                    activeKeyIndex = nextIdx
+                }
+                delay(2000L * ((attempt % 3) + 1))
             }
         }
 
-        throw lastError ?: QuotaExceededException("تم تجاوز حد الطلبات لكافة المفاتيح.")
+        throw lastError ?: QuotaExceededException("تم تجاوز حد الطلبات أو تعذر الاتصال بكافة المفاتيح.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {
@@ -463,9 +484,10 @@ class GeminiTtsClient(
                 if (finishReason.isNotBlank() && finishReason != "STOP") {
                     when (finishReason) {
                         "SAFETY" -> throw IllegalStateException("تم حظر المقطع بواسطة فلاتر الأمان لـ Gemini (finishReason: SAFETY).")
-                        "MAX_TOKENS" -> throw IllegalStateException("المقطع تجاوز حد الحروف المسموح بتوليدها صوتياً (finishReason: MAX_TOKENS).")
+                        "MAX_TOKENS" -> throw TransientTtsException("المقطع تجاوز حد الحروف المسموح بتوليدها صوتياً (finishReason: MAX_TOKENS).")
                         "RECITATION" -> throw IllegalStateException("تم إيقاف المقطع بسبب حقوق النشر أو الاقتباس (finishReason: RECITATION).")
-                        else -> throw IllegalStateException("توقف توليد الصوت من الخادم (السبب: $finishReason).")
+                        "OTHER" -> throw TransientTtsException("توقف توليد الصوت من الخادم بشكل عابر (السبب: OTHER).")
+                        else -> throw TransientTtsException("توقف توليد الصوت من الخادم (السبب: $finishReason).")
                     }
                 }
 
@@ -479,13 +501,13 @@ class GeminiTtsClient(
                     }
                     if (textList.isNotEmpty()) {
                         val textSample = textList.joinToString(" ").take(100)
-                        throw IllegalStateException("استجاب النموذج بنص بدلاً من الصوت: \"$textSample\"")
+                        throw TransientTtsException("استجاب النموذج بنص بدلاً من الصوت: \"$textSample\"")
                     }
                 }
             }
         }
 
-        throw IllegalStateException("لم يُرجع خادم جوجل بيانات صوتية صالحة في الاستجابة.")
+        throw TransientTtsException("لم يُرجع خادم جوجل بيانات صوتية صالحة في الاستجابة (تعثر مؤقت في التوليد).")
     }
 
     suspend fun synthesize(
