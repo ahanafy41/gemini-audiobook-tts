@@ -101,11 +101,12 @@
         </LinearLayout>
 
         <Button
-            android:id="@+id/btnPreviewRefAudio"
+            android:id="@+id/btnPlayRefAudio"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="48dp"
             android:layout_marginTop="8dp"
+            android:visibility="gone"
             android:text="@string/repl_btn_preview_sample"
             android:contentDescription="@string/repl_desc_preview_sample"
             android:textColor="@color/text_high_contrast"
@@ -155,7 +156,7 @@
                 android:textSize="12sp" />
 
             <Button
-                android:id="@+id/btnCopyConsentStatement"
+                android:id="@+id/btnCopyConsent"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="48dp"
@@ -206,11 +207,12 @@
         </LinearLayout>
 
         <Button
-            android:id="@+id/btnPreviewConsentAudio"
+            android:id="@+id/btnPlayConsentAudio"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="48dp"
             android:layout_marginTop="8dp"
+            android:visibility="gone"
             android:text="@string/repl_btn_preview_consent"
             android:contentDescription="@string/repl_desc_preview_consent"
             android:textColor="@color/text_high_contrast"
