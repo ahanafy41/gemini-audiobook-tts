@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App &amp; General Navigation -->
     <string name="app_name">مكتبة جيميني الصوتية</string>
     <string name="title_my_books">المكتبة</string>
     <string name="action_add_book">إضافة كتاب</string>
@@ -12,6 +13,7 @@
     <string name="action_prev_chapter">السابق</string>
     <string name="action_next_chapter">التالي</string>
     <string name="action_speed">السرعة: 1.0x</string>
+    <string name="desc_change_speed">تغيير سرعة القراءة الصوتية</string>
     <string name="label_no_books">المكتبة فارغة</string>
     <string name="label_mini_player">المشغل</string>
     <string name="dialog_enter_api_key">مفتاح Gemini API</string>
@@ -22,6 +24,7 @@
     <string name="status_ready">جاهز للاستماع</string>
     <string name="confirm_delete_title">حذف الكتاب</string>
     <string name="confirm_delete_msg">هل تريد حذف هذا الكتاب وملفاته الصوتية؟</string>
+    <string name="confirm_delete_named_msg">هل أنت متأكد من حذف «%1$s» ومقاطعه الصوتية؟</string>
     <string name="action_delete">حذف</string>
 
     <!-- Bottom Navigation Tabs -->
@@ -30,7 +33,23 @@
     <string name="nav_studio">الأصوات</string>
     <string name="nav_settings">الإعدادات</string>
 
-    <!-- Voice Studio -->
+    <!-- Player Screen Texts -->
+    <string name="player_no_book_playing">لا يوجد كتاب قيد التشغيل حالياً</string>
+    <string name="player_select_book_hint">اختر كتاباً من القائمة لبدء الاستماع</string>
+    <string name="mini_player_no_book">لا يوجد كتاب</string>
+    <string name="mini_player_select_hint">اختر كتاباً من المكتبة</string>
+    <string name="player_btn_prev">السابق</string>
+    <string name="player_btn_rewind">-15ث</string>
+    <string name="player_btn_forward">+30ث</string>
+    <string name="player_btn_next">التالي</string>
+    <string name="desc_open_full_player">زر فتح المشغل الصوتي الكامل</string>
+    <string name="desc_play_pause">زر التشغيل والإيقاف المؤقت</string>
+    <string name="desc_rewind">إرجاع 15 ثانية للخلف</string>
+    <string name="desc_forward">تقديم 30 ثانية للأمام</string>
+    <string name="desc_prev_chapter">الانتقال للفصل السابق</string>
+    <string name="desc_next_chapter">الانتقال للفصل التالي</string>
+
+    <!-- Voice Studio Tab -->
     <string name="title_studio">الأصوات</string>
     <string name="label_narrator_voice">صوت الراوي</string>
     <string name="label_voice_style">نمط الإلقاء</string>
@@ -40,6 +59,20 @@
     <string name="btn_replicate_voice">استنساخ صوت جديد</string>
     <string name="btn_test_voice_audition">معاينة الصوت</string>
     <string name="btn_open_full_player">المشغل</string>
+    <string name="desc_select_narrator_voice">زر اختيار صوت الراوي الأساسي</string>
+    <string name="desc_select_voice_style">زر اختيار نمط الإلقاء الصوتي</string>
+    <string name="desc_custom_voice_instructions">زر ضبط تعليمات وتوجيهات الأداء الصوتي المخصصة</string>
+    <string name="desc_toggle_multi_speaker">تبديل حالة الحوار متعدد الرواة</string>
+    <string name="desc_select_character_voice">زر اختيار صوت شخصيات الحوار</string>
+    <string name="desc_dialogue_help">شرح طريقة كتابة الحوار المتعدد لنموذج جوجل</string>
+    <string name="btn_dialogue_help">دليل صيغة الحوار</string>
+    <string name="label_narrator_format">الراوي: %1$s</string>
+    <string name="label_style_format">النمط: %1$s</string>
+    <string name="label_character_format">الشخصيات: %1$s</string>
+    <string name="label_instructions_custom">التعليمات: مخصصة (انقر للتعديل)</string>
+    <string name="label_instructions_none">التعليمات المخصصة للصوت: غير محددة</string>
+    <string name="multi_speaker_enabled">الحوار: مفعّل</string>
+    <string name="multi_speaker_disabled">الحوار: معطّل</string>
 
     <!-- Voice Design Dialog -->
     <string name="dialog_voice_design_title">تصميم صوت جديد</string>
@@ -57,6 +90,13 @@
     <string name="label_enter_custom_voice_id">+ إدخال معرف صوت يدوياً</string>
     <string name="dialog_enter_voice_id_title">معرف الصوت</string>
     <string name="dialog_enter_voice_id_hint">مثال: voice_42n103zlznqt</string>
+    <string name="status_keys_not_registered">المفاتيح غير مسجلة</string>
+    <string name="desc_keys_not_registered">مفاتيح API غير مسجلة، اضغط على تعديل لإضافة مفاتيحك</string>
+    <string name="status_checking_key">جاري التحقق من المفتاح...</string>
+    <string name="storage_perm_enabled">الوصول للملفات: مفعّل (الذاكرة الداخلية)</string>
+    <string name="storage_perm_disabled">الوصول للملفات: غير مفعّل (اضغط للتفعيل)</string>
+    <string name="desc_storage_perm_enabled">إذن الوصول لجميع الملفات مفعّل، يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية</string>
+    <string name="desc_storage_perm_disabled">إذن الوصول لجميع الملفات غير مفعّل، اضغط للانتقال للإعدادات والتفعيل للحفظ في الذاكرة الداخلية</string>
 
     <!-- Language Selection -->
     <string name="label_language_selection">لغة التطبيق</string>
@@ -72,17 +112,30 @@
     <string name="card_resume_info">يوجد كتاب غير مكتمل: %1$s (تم تحويل %2$d من %3$d فصول)</string>
     <string name="action_resume_conversion">استئناف التحويل</string>
     <string name="action_dismiss_resume">إغلاق بطاقة الاستئناف</string>
-    <string name="dialog_book_options_title">خيارات الكتاب</string>
-    <string name="action_play_completed_chapters">تشغيل الفصول المنجزة</string>
-    <string name="action_resume_from_current">استئناف التحويل من الفصل الحالي</string>
+    <string name="desc_resume_card">تنبيه: يوجد كتاب غير مكتمل، %1$s، تم إنجاز %2$d من %3$d فصول. زر استئناف التحويل متاح.</string>
 
-    <!-- 429 & Quota Dialog -->
+    <!-- Book Options &amp; List Dialogs -->
+    <string name="dialog_book_options_title">خيارات الكتاب</string>
+    <string name="action_play_completed_chapters">تشغيل الفصول المتاحة</string>
+    <string name="action_resume_remaining_chapters">استئناف تحويل باقي الفصول</string>
+    <string name="action_export_book">تصدير الصوت إلى مجلد GeminiAudiobook</string>
+    <string name="action_share_book">مشاركة الملفات الصوتية</string>
+    <string name="action_delete_book">حذف الكتاب</string>
+    <string name="action_play_book">تشغيل الكتاب</string>
+    <string name="book_incomplete_dialog_msg">هذا الكتاب غير مكتمل (%1$d من أصل %2$d فصول جاهزة).\nماذا تود أن تفعل؟</string>
+    <string name="action_play_done">تشغيل المنجز</string>
+    <string name="book_subtitle_incomplete">%1$d من أصل %2$d فصول جاهزة (غير مكتمل)</string>
+    <string name="book_subtitle_complete">%1$d فصل (مكتمل)</string>
+    <string name="desc_book_incomplete">%1$s، غير مكتمل، %2$d فصول جاهزة من أصل %3$d. اضغط للاستئناف أو التشغيل، أو اضغط مطولاً للخيارات</string>
+    <string name="desc_book_complete">%1$s، مكتمل، يحتوي على %2$d فصول. اضغط للتشغيل، أو اضغط مطولاً للخيارات</string>
+
+    <!-- 429 &amp; Quota Dialog -->
     <string name="dialog_quota_exceeded_title">تجاوز حصة الاستخدام (429)</string>
-    <string name="dialog_quota_exceeded_msg">وصلت للحد الأقصى لطلبات Gemini API. يمكنك الانتظار والمحاولة مجدداً أو تعديل المفتاح.</string>
+    <string name="dialog_quota_exceeded_msg">تم تجاوز حد الطلبات المسموح به لنموذج Gemini.\n\nتم حفظ جميع الفصول والمقاطع السابقة ولن تضيع.\nيمكنك الانتظار وإعادة المحاولة الآن، أو تعديل مفتاح API.</string>
     <string name="action_retry_now">إعادة المحاولة الآن</string>
     <string name="action_edit_key">تعديل مفتاح API</string>
 
-    <!-- Storage & Permissions -->
+    <!-- Storage &amp; Permissions -->
     <string name="label_storage_path">مسار حفظ الكتب والملفات</string>
     <string name="storage_path_info">المسار: الذاكرة الداخلية / GeminiAudiobook</string>
     <string name="btn_storage_permission">الوصول الكامل للملفات: فحص الإذن</string>
@@ -93,18 +146,239 @@
     <string name="app_version_label">الإصدار: %1$s</string>
     <string name="btn_check_updates">فحص التحديثات</string>
     <string name="desc_check_updates">زر فحص وجود تحديث جديد للتطبيق وتثبيته تلقائياً</string>
+    <string name="update_download_progress">تم تحميل %.1f من %.1f ميجابايت (%d%%)</string>
+    <string name="update_download_complete">اكتمل تحميل التحديث 100%. جارِ فتح شاشة التثبيت...</string>
+    <string name="update_install_perm_msg">يرجى تفعيل خيار السماح بتثبيت التطبيقات من هذا المصدر لمتابعة التحديث</string>
+    <string name="toast_install_perm">يرجى منح إذن تثبيت التطبيقات من خارج المتجر</string>
+    <string name="toast_invalid_update_file">ملف التحديث غير صالح</string>
+    <string name="update_download_failed">فشل تحميل التحديث: %1$s</string>
 
-    <!-- Status & Announcements -->
-    <string name="status_tab_library">تبويب المكتبة</string>
-    <string name="status_tab_player">تبويب المشغل</string>
+    <!-- Status &amp; Announcements -->
+    <string name="status_tab_library">تبويب المكتبة والكتب الصوتية</string>
+    <string name="status_tab_player">تبويب المشغل الصوتي الكامل</string>
     <string name="status_tab_studio">تبويب استوديو الأصوات وأنماط الإلقاء</string>
     <string name="status_tab_settings">تبويب إعدادات التطبيق</string>
     <string name="status_converting">جارِ تحويل الكتاب إلى صوت...</string>
-    <string name="status_conversion_success">تم تحويل الكتاب بنجاح!</string>
-    <string name="status_conversion_error">حدث خطأ أثناء تحويل الكتاب</string>
+    <string name="status_conversion_success">اكتمل تجهيز الكتاب الصوتي بنجاح! تم الحفظ في مجلد: %1$s</string>
+    <string name="status_conversion_error">حدث توقف أثناء المعالجة: %1$s. تم حفظ الفصول المنجزة.</string>
     <string name="status_conversion_paused">تم إيقاف التحويل مؤقتاً</string>
+    <string name="status_book_deleted">تم حذف الكتاب</string>
+    <string name="status_audio_not_available">الملف الصوتي لهذا الفصل غير متوفر</string>
+    <string name="toast_audio_missing">الملف الصوتي غير موجود</string>
     <string name="toast_no_text_or_file">يرجى لصق نص أو اختيار ملف كتاب أولاً</string>
     <string name="status_connection_success">الاتصال ناجح بمفتاح Gemini API!</string>
     <string name="status_connection_failed">فشل الاتصال: %1$s</string>
     <string name="toast_key_saved">تم حفظ المفتاح بنجاح</string>
+    <string name="status_exporting_chapters">جارِ تصدير فصول الكتاب إلى مجلد GeminiAudiobook بالذاكرة الداخلية...</string>
+    <string name="status_export_success">تم تصدير %1$d فصول بنجاح إلى: %2$s</string>
+    <string name="status_export_no_chapters">لم يتم العثور على فصول جاهزة لتصديرها</string>
+    <string name="status_share_failed">تعذر مشاركة الملفات الصوتية</string>
+    <string name="status_resuming_book">استئناف معالجة الفصول المتبقية لكتاب «%1$s»...</string>
+    <string name="status_select_original_file">يرجى اختيار ملف النص الأصلي للكتاب لاستئناف معالجته.</string>
+
+    <!-- Paste Text Dialog Labels -->
+    <string name="paste_dialog_title">تحويل نص مخصص</string>
+    <string name="paste_dialog_hint_title">عنوان المقطع (اختياري)</string>
+    <string name="desc_paste_title">حقل إدخال عنوان المقطع، اختياري</string>
+    <string name="btn_paste_clipboard">لصق من الحافظة</string>
+    <string name="desc_paste_clipboard">زر سحب ولصق النص المنسوخ من الحافظة مباشرة</string>
+    <string name="btn_dialogue_template">نموذج حوار</string>
+    <string name="desc_dialogue_template">إدراج نموذج حوار تجريبي لمتحدثين اثنين</string>
+    <string name="paste_dialog_content_label">النص</string>
+    <string name="paste_dialog_content_hint">أدخل أو الصق النص هنا...</string>
+    <string name="desc_paste_content">حقل إدخال النص لتحويله إلى كتاب صوتي</string>
+    <string name="char_count_format">عدد الحروف: %1$d</string>
+    <string name="dialogue_type_narrator">نوع النص: فردي (الراوي)</string>
+    <string name="dialogue_type_empty">نوع النص: لم يتم إدخال نص بعد</string>
+    <string name="dialogue_type_detected">التعرف الصوتي: %1$s</string>
+    <string name="active_voice_preview">الراوي: %1$s | النمط: %2$s%3$s</string>
+    <string name="toast_text_pasted">تم لصق النص بنجاح</string>
+
+    <!-- Voice Replication Dialog Labels -->
+    <string name="repl_dialog_title">استنساخ صوت جديد</string>
+    <string name="repl_dialog_subtitle">استنساخ صوت حقيقي بمطابقة البصمة الصوتية عبر Gemini 3.8 Flash TTS</string>
+    <string name="repl_label_voice_name">اسم الصوت المستنسخ:</string>
+    <string name="repl_hint_voice_name">مثال: صوت أحمد</string>
+    <string name="repl_desc_voice_name">حقل إدخال اسم الصوت المستنسخ</string>
+    <string name="repl_label_ref_audio">1. عينة الصوت الأساسية (10 إلى 30 ثانية):</string>
+    <string name="repl_status_no_sample">لم يتم تسجيل أو اختيار العينة بعد</string>
+    <string name="repl_btn_record_sample">تسجيل العينة</string>
+    <string name="repl_desc_record_sample">تسجيل عينة الصوت الأساسية من الميكروفون</string>
+    <string name="repl_btn_pick_file">اختيار ملف</string>
+    <string name="repl_desc_pick_file">اختيار ملف صوتي من الجهاز كعينة أساسية</string>
+    <string name="repl_btn_preview_sample">معاينة عينة الصوت</string>
+    <string name="repl_desc_preview_sample">تشغيل ومعاينة عينة الصوت الأساسية المسجلة</string>
+    <string name="repl_label_consent">2. تسجيل إقرار الموافقة الصوتي (إلزامي):</string>
+    <string name="repl_prompt_read_aloud">اقرأ العبارة التالية بصوتك بالإنجليزية:</string>
+    <string name="repl_consent_text">I hereby confirm that I am the owner of this voice and I consent to Google using it to create a synthetic voice model.</string>
+    <string name="repl_consent_meaning">(المعنى: أنا صاحب هذا الصوت وأوافق على استخدام Google له لإنشاء نموذج صوتي اصطناعي)</string>
+    <string name="repl_btn_copy_phrase">نسخ العبارة</string>
+    <string name="repl_desc_copy_phrase">نسخ عبارة الموافقة باللغة الإنجليزية إلى الحافظة</string>
+    <string name="repl_status_no_consent">لم يتم تسجيل أو اختيار إقرار الموافقة بعد</string>
+    <string name="repl_btn_record_consent">تسجيل الموافقة</string>
+    <string name="repl_desc_record_consent">تسجيل قراءة إقرار الموافقة من الميكروفون</string>
+    <string name="repl_desc_pick_consent">اختيار ملف تسجيل الموافقة من الجهاز</string>
+    <string name="repl_btn_preview_consent">معاينة تسجيل الموافقة</string>
+    <string name="repl_desc_preview_consent">تشغيل ومعاينة تسجيل إقرار الموافقة</string>
+    <string name="repl_btn_start">بدء الاستنساخ وحفظ الصوت</string>
+    <string name="repl_desc_start">إرسال العينة والموافقة وبدء استنساخ الصوت عبر الذكاء الاصطناعي</string>
+    <string name="repl_desc_cancel">إلغاء نافذة استنساخ الصوت</string>
+
+    <!-- Additional Announcements &amp; Dialog Strings -->
+    <string name="toast_empty_audio_file">الملف الصوتي فارغ أو تعذر قراءته</string>
+    <string name="toast_error_reading_file">تعذر قراءة الملف: %1$s</string>
+    <string name="toast_cannot_open_file_picker">تعذر فتح منتقي الملفات</string>
+    <string name="announce_rewind_15">تم إرجاع 15 ثانية</string>
+    <string name="announce_forward_30">تم تقديم 30 ثانية</string>
+    <string name="announce_require_api_key_sync">يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لمزامنة الأصوات</string>
+    <string name="toast_require_api_key">يرجى تسجيل المفتاح في الإعدادات أولاً</string>
+    <string name="announce_syncing_voices">جارِ مزامنة واسترجاع الأصوات المصممة من حسابك على Google...</string>
+    <string name="announce_sync_voices_found">تم العثور على %1$d أصوات مصممة خاصة بمفتاحك ومزامنتها بنجاح!</string>
+    <string name="announce_sync_voices_none">لم يتم العثور على أصوات مصممة محفوظة على هذا المفتاح حتى الآن</string>
+    <string name="announce_sync_voices_failed">تعذر مزامنة الأصوات: %1$s</string>
+    <string name="toast_sync_voices_error">خطأ في المزامنة: %1$s</string>
+    <string name="announce_narrator_selected">تم اختيار صوت الراوي: %1$s</string>
+    <string name="announce_character_selected">تم اختيار صوت الشخصيات: %1$s</string>
+    <string name="announce_style_selected">تم اختيار نمط الإلقاء: %1$s</string>
+    <string name="announce_multi_speaker_on">تم تفعيل الحوار متعدد الرواة</string>
+    <string name="announce_multi_speaker_off">تم تعطيل الحوار متعدد الرواة</string>
+    <string name="voice_picker_title_narrator">اختر صوت الراوي الأساسي</string>
+    <string name="voice_picker_title_character">اختر صوت شخصيات الحوار</string>
+    <string name="voice_picker_add_custom_manual">+ إدخال معرف صوت مخصص يدوياً (Voice ID)</string>
+    <string name="voice_picker_sync_cloud">🔄 مزامنة واسترجاع الأصوات من السحابة</string>
+    <string name="voice_badge_replicated">[مستنسخ]</string>
+    <string name="voice_badge_designed">[مصمم]</string>
+    <string name="style_picker_title">اختر نمط الإلقاء الصوتي</string>
+    <string name="dialogue_help_title">دليل تنسيق الحوار متعدد الرواة</string>
+    <string name="dialogue_help_msg">طريقة تنسيق الروايات والقصص متعددة الشخصيات لنموذج Gemini TTS:\n\n1. استخدم علامات التنصيص للحوار:\n   - كلام الشخصيات داخل الأقواس سيُنطق بصوت الشخصيات المخصص تلقائياً.\n   - السرد العام خارج الأقواس سيُنطق بصوت الراوي الأساسي.\n\n2. علامات التنصيص المدعومة:\n   - الأقواس العربية: «...» أو “...”\n   - الأقواس الإنجليزية: \"...\"\n\n3. صيغة الشرطة الحوارية للروايات مدعومة أيضاً:\n   - — إلى أين أنت ذاهب؟\n   - — إلى المكتبة لاستكمال البحث.</string>
+    <string name="custom_instructions_title">تعليمات وتوجيهات الأداء الصوتي</string>
+    <string name="custom_instructions_hint">مثال: اقرأ ببطء مع وقفات درامية، وركز على نطق أسماء الأعلام التاريخية بوضوح</string>
+    <string name="custom_instructions_clear">مسح التعليمات</string>
+    <string name="audition_generating">جارِ توليد عينة صوتية للمعاينة...</string>
+    <string name="audition_success">جارِ الاستماع إلى عينة الصوت...</string>
+    <string name="audition_failed">تعذر توليد عينة الصوت: %1$s</string>
+    <string name="audition_text">مرحباً بكم في مكتبة جيميني الصوتية. هذه تجربة للأداء ونمط الإلقاء الصوتي المختار.</string>
+    <string name="design_generating">جارِ تصميم الصوت عبر الذكاء الاصطناعي...</string>
+    <string name="design_success">تم تصميم الصوت وحفظه بنجاح!</string>
+    <string name="design_failed">تعذر تصميم الصوت: %1$s</string>
+    <string name="repl_starting">جارِ إرسال العينات واستنساخ الصوت...</string>
+    <string name="repl_success">تم استنساخ الصوت وحفظه بنجاح!</string>
+    <string name="repl_failed">فشل استنساخ الصوت: %1$s</string>
+    <string name="repl_error_missing_sample">يرجى تسجيل أو اختيار عينة الصوت أولاً</string>
+    <string name="repl_error_missing_consent">يرجى تسجيل أو اختيار إقرار الموافقة الصوتي</string>
+    <string name="repl_sample_selected">تم تجهيز عينة الصوت (%1$d كيلوبايت)</string>
+    <string name="repl_consent_selected">تم تجهيز إقرار الموافقة (%1$d كيلوبايت)</string>
+    <string name="api_key_test_running">جارِ فحص الاتصال بمفتاح Gemini API...</string>
+    <string name="api_key_test_success">الاتصال ناجح بمفتاح Gemini API!</string>
+    <string name="api_key_test_failed">فشل فحص الاتصال: %1$s</string>
+    <string name="updates_checking">جارِ فحص وجود تحديث جديد...</string>
+    <string name="updates_latest">أنت تستخدم أحدث إصدار بالفعل (%1$s)</string>
+    <string name="updates_failed">تعذر فحص التحديثات: %1$s</string>
+    <string name="updates_available_title">يتوفر تحديث جديد (%1$s)</string>
+    <string name="updates_action_install">تحميل وتثبيت التحديث</string>
+    <string name="updates_action_later">لاحقاً</string>
+    <string name="settings_keys_status_single">المفتاح: %1$s</string>
+    <string name="settings_keys_status_multi">المفاتيح: %1$s (+%2$d أخرى)</string>
+    <string name="settings_keys_desc_format">قائمة المفاتيح: مسجل %1$d مفاتيح API، المفتاح الأول %2$s</string>
+    <string name="model_selected_format">تم اعتماد النموذج: %1$s</string>
+    <string name="model_picker_title">اختر نموذج الذكاء الاصطناعي</string>
+    <string name="paste_dialog_template_text">الراوي: انبلج فجر اليوم التالي على هضاب الصحراء الهادئة.\n\n«هل أعددت القافلة للرحيل يا طارق؟» سأل الشيخ بصوت وقور.\n\n«نعم يا سيدي، كل شيء جاهز للمسير» أجاب الفتى وهو يشد الرحال بابتسامة واثقة.</string>
+    <string name="paste_dialog_pasted_announcement">تم لصق %1$d حرفاً من الحافظة. %2$s</string>
+    <string name="book_processing_started">جارِ بدء تحويل «%1$s»...</string>
+    <string name="book_retry_started">إعادة محاولة تحويل «%1$s»...</string>
+    <string name="toast_keys_required_conversion">يرجى إدخال مفاتيح Gemini API في الإعدادات أولاً لتحويل الكتب بالذكاء الاصطناعي</string>
+
+    <!-- Additional Localization Strings -->
+    <string name="dialog_enter_voice_id_desc">حقل إدخال معرف الصوت المخصص</string>
+    <string name="voice_manual_apply">اعتماد الصوت</string>
+    <string name="toast_require_voice_id">يرجى إدخال معرف الصوت</string>
+    <string name="format_custom_voice_name">صوت مخصص (%1$s)</string>
+    <string name="format_custom_voice_desc">معرف مخصص مدخل يدوياً</string>
+    <string name="announce_custom_voice_activated">تم تفعيل الصوت المخصص: %1$s</string>
+    <string name="toast_custom_voice_activated">تم تفعيل الصوت المخصص بنجاح</string>
+    <string name="custom_instructions_desc">حقل إدخال التعليمات المخصصة لأداء الصوت</string>
+    <string name="announce_custom_instructions_saved">تم حفظ التعليمات المخصصة للصوت بنجاح</string>
+    <string name="toast_custom_instructions_saved">تم حفظ التعليمات المخصصة</string>
+    <string name="announce_custom_instructions_cleared">تم مسح التعليمات المخصصة للصوت</string>
+    <string name="toast_custom_instructions_cleared">تم مسح التعليمات المخصصة</string>
+    <string name="dialogue_help_btn_copy">نسخ نموذج تجريبي</string>
+    <string name="announce_dialogue_template_copied">تم نسخ نموذج الحوار التجريبي إلى الحافظة بنجاح</string>
+    <string name="toast_dialogue_template_copied">تم نسخ النموذج إلى الحافظة بنجاح</string>
+    <string name="audition_sample_single_format">مرحباً يا أحمد، هذا فحص واختبار لصوت جيميني بالذكاء الاصطناعي بنمط %1$s.</string>
+    <string name="audition_sample_multi_speaker_1">Speaker1: مرحباً يا أحمد، هذا فحص واختبار لصوت الراوي بنمط %1$s.</string>
+    <string name="audition_sample_multi_speaker_2">Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصيات، للتأكد من سلاسة الحوار بين الصوتين.</string>
+    <string name="dialog_voice_design_name_label">اسم الصوت:</string>
+    <string name="dialog_voice_design_prompt_label">وصف الصوت (باللغة الإنجليزية):</string>
+    <string name="toast_voice_design_blank">يرجى إدخال اسم الصوت ووصفه</string>
+    <string name="announce_voice_design_wait">جارِ تصميم الصوت الجديد بالذكاء الاصطناعي... يرجى الانتظار</string>
+    <string name="toast_voice_design_wait">جارِ تصميم الصوت وتوليد العينة... يرجى الانتظار</string>
+    <string name="error_voice_design_no_id">لم يُرجع الخادم معرف الصوت (Voice ID).</string>
+    <string name="repl_toast_consent_copied">تم نسخ عبارة الموافقة بنجاح</string>
+    <string name="repl_status_recording_sample">جارِ التسجيل... تحدث بنبرتك الطبيعية لمدة 10-30 ثانية</string>
+    <string name="repl_status_sample_recorded">تم تسجيل العينة بنجاح (%1$d ك.ب)</string>
+    <string name="repl_status_sample_file_chosen">تم اختيار ملف: %1$s (%2$d ك.ب)</string>
+    <string name="repl_status_recording_consent">جارِ التسجيل... اقرأ نص الموافقة الإنجليزي بصوتك</string>
+    <string name="repl_status_consent_recorded">تم تسجيل الموافقة بنجاح (%1$d ك.ب)</string>
+    <string name="repl_status_consent_file_chosen">تم اختيار ملف إقرار الموافقة: %1$s (%2$d ك.ب)</string>
+    <string name="repl_btn_record_sample_stop">إيقاف (%1$d ث)</string>
+    <string name="repl_btn_record_sample_again">إعادة التسجيل</string>
+    <string name="repl_btn_preview_sample_play">معاينة عينة الصوت</string>
+    <string name="repl_btn_preview_sample_stop">إيقاف المعاينة</string>
+    <string name="repl_btn_preview_consent_play">معاينة تسجيل الموافقة</string>
+    <string name="repl_btn_preview_consent_stop">إيقاف المعاينة</string>
+    <string name="repl_btn_submit_running">جارِ الاستنساخ والمطابقة...</string>
+    <string name="repl_status_low_audio">لم يتم التقاط صوت كافٍ، حاول مجدداً</string>
+    <string name="repl_status_low_consent">لم يتم التقاط تسجيل الموافقة، حاول مجدداً</string>
+    <string name="toast_mic_perm_required">إذن الميكروفون مطلوب لتسجيل الصوت</string>
+    <string name="toast_cannot_start_recording">تعذر بدء التسجيل، تأكد من إذن الميكروفون</string>
+    <string name="storage_perm_dialog_title">إذن الوصول الكامل للملفات</string>
+    <string name="storage_perm_dialog_msg">ليتمكن التطبيق من حفظ فصول وكتب الصوت مباشرة داخل مجلد «GeminiAudiobook» بالذاكرة الداخلية لجهازك، يرجى تفعيل خيار «الوصول إلى جميع الملفات» في شاشة الإعدادات التالية.</string>
+    <string name="storage_perm_btn_settings">الانتقال للإعدادات والتفعيل</string>
+    <string name="storage_perm_btn_later">لاحقاً</string>
+    <string name="storage_perm_already_granted">إذن الوصول لجميع الملفات مفعّل بالفعل. يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية.</string>
+    <string name="toast_storage_perm_already_granted">الإذن مفعّل بالفعل</string>
+    <string name="dialog_api_keys_title">إدارة مفاتيح Gemini API المتعددة</string>
+    <string name="dialog_api_keys_hint">أدخل مفتاح أو أكثر من مفاتيح Gemini API (كل مفتاح في سطر مستقل)</string>
+    <string name="dialog_api_keys_desc">حقل إدخال مفاتيح Gemini API، ضع كل مفتاح في سطر مستقل</string>
+    <string name="btn_paste_from_clipboard">لصق من الحافظة</string>
+    <string name="desc_paste_from_clipboard">زر لصق مفتاح جديد من الحافظة وإضافته للقائمة</string>
+    <string name="announce_key_pasted_success">تمت إضافة المفتاح من الحافظة للقائمة بنجاح</string>
+    <string name="announce_key_already_in_list">المفتاح موجود بالفعل في القائمة</string>
+    <string name="announce_clipboard_no_valid_key">الحافظة لا تحتوي على مفتاح API صالح يبدأ بـ AIzaSy</string>
+    <string name="toast_clipboard_no_valid_key">الحافظة فارغة أو لا تحوي مفتاح صالح</string>
+    <string name="announce_keys_saved_count">تم حفظ %1$d مفتاح API بنجاح</string>
+    <string name="toast_keys_saved_count">تم حفظ %1$d مفتاح</string>
+    <string name="announce_test_keys_running">جارٍ فحص %1$d مفتاح API مع خوادم Google...</string>
+    <string name="test_keys_audio_text">اختبار اتصال مفاتيح API</string>
+    <string name="test_keys_success_msg">تم فحص المفاتيح بنجاح! الاتصال يعمل (%1$d مفاتيح جاهزة).</string>
+    <string name="test_keys_dialog_title">حالة الاتصال</string>
+    <string name="paste_active_voice_format">الراوي: %1$s | النمط: %2$s%3$s</string>
+    <string name="paste_multi_suffix"> | الحوار متعدد</string>
+    <string name="btn_convert_save_library">تحويل وحفظ في المكتبة</string>
+    <string name="status_importing_book">جارِ استيراد الكتاب وقراءة الملف...</string>
+    <string name="toast_unsupported_file_type">نوع الملف غير مدعوم. اختر ملف .txt أو .md أو .docx</string>
+    <string name="toast_file_empty">الملف المختار فارغ!</string>
+    <string name="status_converting_book_format">جارِ تحويل فصول «%1$s» عبر الذكاء الاصطناعي (نمط: %2$s)...</string>
+    <string name="status_converting_chapter_format">تحويل الفصل %1$d من %2$d: %3$s</string>
+    <string name="player_progress_format">فصل %1$d من أصل %2$d</string>
+    <string name="announce_playing_format">تشغيل: %1$s - %2$s</string>
+    <string name="announce_playback_paused">تم الإيقاف المؤقت</string>
+    <string name="announce_playback_resumed">جارِ التشغيل</string>
+    <string name="announce_end_of_book">وصلت إلى نهاية الكتاب</string>
+    <string name="announce_already_first_chapter">أنت بالفعل في الفصل الأول</string>
+    <string name="announce_reading_speed_format">سرعة القراءة: %1$.2f ضعف</string>
+    <string name="updates_dialog_body_format">%1$s
+
+هل ترغب في تحميل وتثبيت التحديث الآن؟</string>
+    <string name="updates_downloading_title">جارِ تحميل التحديث v%1$s</string>
+    <string name="updates_action_cancel_download">إلغاء التحميل</string>
+    <string name="updates_cancelled_announcement">تم إلغاء تحميل التحديث</string>
+    <string name="updates_started_announcement">بدأ تحميل التحديث v%1$s... يرجى الانتظار</string>
+    <string name="updates_progress_text_format">تم تحميل %.1f من %.1f ميجابايت (%d%%)</string>
+    <string name="updates_percent_announcement">اكتمال التحميل: %1$d%%</string>
+    <string name="notification_channel_name">تشغيل الكتب الصوتية</string>
+    <string name="notification_channel_desc">إشعارات التحكم في مشغل الكتاب الصوتي بالخلفية</string>
+    <string name="share_chapters_chooser_title">مشاركة فصول: %1$s</string>
+    <string name="default_book_title">كتاب صوتي</string>
+    <string name="default_chapter_title_format">فصل %1$d</string>
 </resources>

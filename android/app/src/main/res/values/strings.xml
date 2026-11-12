@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App &amp; General Navigation -->
     <string name="app_name">Gemini Audiobook</string>
     <string name="title_my_books">Library</string>
     <string name="action_add_book">Add Book</string>
@@ -12,6 +13,7 @@
     <string name="action_prev_chapter">Previous</string>
     <string name="action_next_chapter">Next</string>
     <string name="action_speed">Speed: 1.0x</string>
+    <string name="desc_change_speed">Change audio narration playback speed</string>
     <string name="label_no_books">Library is empty</string>
     <string name="label_mini_player">Player</string>
     <string name="dialog_enter_api_key">Gemini API Key</string>
@@ -22,6 +24,7 @@
     <string name="status_ready">Ready to listen</string>
     <string name="confirm_delete_title">Delete Book</string>
     <string name="confirm_delete_msg">Do you want to delete this book and its audio files?</string>
+    <string name="confirm_delete_named_msg">Are you sure you want to delete \'%1$s\' and its audio recordings?</string>
     <string name="action_delete">Delete</string>
 
     <!-- Bottom Navigation Tabs -->
@@ -30,7 +33,23 @@
     <string name="nav_studio">Voices</string>
     <string name="nav_settings">Settings</string>
 
-    <!-- Voice Studio -->
+    <!-- Player Screen Texts -->
+    <string name="player_no_book_playing">No audiobook currently playing</string>
+    <string name="player_select_book_hint">Select a book from the library to begin listening</string>
+    <string name="mini_player_no_book">No active book</string>
+    <string name="mini_player_select_hint">Choose a book from the library</string>
+    <string name="player_btn_prev">Previous</string>
+    <string name="player_btn_rewind">-15s</string>
+    <string name="player_btn_forward">+30s</string>
+    <string name="player_btn_next">Next</string>
+    <string name="desc_open_full_player">Open full audio player</string>
+    <string name="desc_play_pause">Play or pause audio playback</string>
+    <string name="desc_rewind">Rewind 15 seconds</string>
+    <string name="desc_forward">Fast forward 30 seconds</string>
+    <string name="desc_prev_chapter">Skip to previous chapter</string>
+    <string name="desc_next_chapter">Skip to next chapter</string>
+
+    <!-- Voice Studio Tab -->
     <string name="title_studio">Voices</string>
     <string name="label_narrator_voice">Narrator Voice</string>
     <string name="label_voice_style">Speaking Style</string>
@@ -40,11 +59,25 @@
     <string name="btn_replicate_voice">Clone / Replicate Voice</string>
     <string name="btn_test_voice_audition">Preview Voice</string>
     <string name="btn_open_full_player">Player</string>
+    <string name="desc_select_narrator_voice">Select primary narrator voice</string>
+    <string name="desc_select_voice_style">Select narration delivery style</string>
+    <string name="desc_custom_voice_instructions">Set custom voice instructions and director prompts</string>
+    <string name="desc_toggle_multi_speaker">Toggle multi-speaker dialogue narration mode</string>
+    <string name="desc_select_character_voice">Select secondary character voice for dialogues</string>
+    <string name="desc_dialogue_help">Multi-speaker formatting guide for Gemini AI</string>
+    <string name="btn_dialogue_help">Dialogue Guide</string>
+    <string name="label_narrator_format">Narrator: %1$s</string>
+    <string name="label_style_format">Style: %1$s</string>
+    <string name="label_character_format">Characters: %1$s</string>
+    <string name="label_instructions_custom">Instructions: Custom (Tap to edit)</string>
+    <string name="label_instructions_none">Custom Instructions: None</string>
+    <string name="multi_speaker_enabled">Dialogue: Enabled</string>
+    <string name="multi_speaker_disabled">Dialogue: Disabled</string>
 
     <!-- Voice Design Dialog -->
     <string name="dialog_voice_design_title">Design New Voice</string>
-    <string name="dialog_voice_design_name_hint">Voice Name (e.g. British Narrator)</string>
-    <string name="dialog_voice_design_prompt_hint">Tone description (e.g. Warm, deep resonant baritone)</string>
+    <string name="dialog_voice_design_name_hint">Voice Name (e.g. British Historian)</string>
+    <string name="dialog_voice_design_prompt_hint">Tone description (e.g. Warm, deep resonant baritone, crisp cadence)</string>
     <string name="btn_generate_voice">Generate Voice</string>
 
     <!-- Settings Tab -->
@@ -57,6 +90,13 @@
     <string name="label_enter_custom_voice_id">+ Enter Custom Voice ID Manually</string>
     <string name="dialog_enter_voice_id_title">Voice ID</string>
     <string name="dialog_enter_voice_id_hint">e.g. voice_42n103zlznqt</string>
+    <string name="status_keys_not_registered">API Keys not configured</string>
+    <string name="desc_keys_not_registered">No API keys registered. Tap Update to add your keys.</string>
+    <string name="status_checking_key">Verifying API key...</string>
+    <string name="storage_perm_enabled">Files Access: Enabled (Internal Storage)</string>
+    <string name="storage_perm_disabled">Files Access: Not Granted (Tap to grant)</string>
+    <string name="desc_storage_perm_enabled">All files access permission granted. Audiobooks saved to GeminiAudiobook directory.</string>
+    <string name="desc_storage_perm_disabled">Files access not granted. Tap to open Settings and allow full storage access.</string>
 
     <!-- Language Selection -->
     <string name="label_language_selection">Language / اللغة</string>
@@ -72,39 +112,273 @@
     <string name="card_resume_info">Incomplete book: %1$s (%2$d of %3$d chapters converted)</string>
     <string name="action_resume_conversion">Resume Conversion</string>
     <string name="action_dismiss_resume">Dismiss Resume Card</string>
-    <string name="dialog_book_options_title">Book Options</string>
-    <string name="action_play_completed_chapters">Play Completed Chapters</string>
-    <string name="action_resume_from_current">Resume Conversion from Current Chapter</string>
+    <string name="desc_resume_card">Alert: Incomplete book %1$s with %2$d of %3$d chapters completed. Resume button available.</string>
 
-    <!-- 429 & Quota Dialog -->
-    <string name="dialog_quota_exceeded_title">Quota Limit Reached (429)</string>
-    <string name="dialog_quota_exceeded_msg">Gemini API quota reached. You can wait and retry or update the API key.</string>
+    <!-- Book Options &amp; List Dialogs -->
+    <string name="dialog_book_options_title">Book Options</string>
+    <string name="action_play_completed_chapters">Play Available Chapters</string>
+    <string name="action_resume_remaining_chapters">Resume Remaining Chapters</string>
+    <string name="action_export_book">Export Audio to GeminiAudiobook Folder</string>
+    <string name="action_share_book">Share Audio Files</string>
+    <string name="action_delete_book">Delete Book</string>
+    <string name="action_play_book">Play Book</string>
+    <string name="book_incomplete_dialog_msg">This book is incomplete (%1$d of %2$d chapters ready).\nWhat would you like to do?</string>
+    <string name="action_play_done">Play Completed</string>
+    <string name="book_subtitle_incomplete">%1$d of %2$d chapters ready (Incomplete)</string>
+    <string name="book_subtitle_complete">%1$d chapters (Completed)</string>
+    <string name="desc_book_incomplete">%1$s, incomplete, %2$d of %3$d chapters ready. Tap to play or resume, long press for options.</string>
+    <string name="desc_book_complete">%1$s, complete, %2$d chapters. Tap to play, long press for options.</string>
+
+    <!-- 429 &amp; Quota Dialog -->
+    <string name="dialog_quota_exceeded_title">Rate Limit Reached (429)</string>
+    <string name="dialog_quota_exceeded_msg">Gemini API rate limit reached.\n\nAll previous chapters and chunks have been safely saved.\nYou can wait and retry now, or switch API keys.</string>
     <string name="action_retry_now">Retry Now</string>
     <string name="action_edit_key">Update API Key</string>
 
-    <!-- Storage & Permissions -->
+    <!-- Storage &amp; Permissions -->
     <string name="label_storage_path">Storage Path</string>
     <string name="storage_path_info">Path: Internal Storage / GeminiAudiobook</string>
     <string name="btn_storage_permission">All Files Access: Check Permission</string>
-    <string name="desc_storage_permission">Check and configure all files access permission</string>
+    <string name="desc_storage_permission">Check and configure full files access permission</string>
 
     <!-- Updates -->
     <string name="label_updates">Updates</string>
     <string name="app_version_label">Version: %1$s</string>
     <string name="btn_check_updates">Check for Updates</string>
     <string name="desc_check_updates">Check for new application updates and install automatically</string>
+    <string name="update_download_progress">Downloaded %.1f of %.1f MB (%d%%)</string>
+    <string name="update_download_complete">Update downloaded 100%. Opening installer...</string>
+    <string name="update_install_perm_msg">Please allow installing unknown apps from this source to proceed with update</string>
+    <string name="toast_install_perm">Please grant install unknown apps permission</string>
+    <string name="toast_invalid_update_file">Invalid update file</string>
+    <string name="update_download_failed">Failed to download update: %1$s</string>
 
-    <!-- Status & Announcements -->
-    <string name="status_tab_library">Library Tab</string>
-    <string name="status_tab_player">Player Tab</string>
-    <string name="status_tab_studio">Voice Studio Tab</string>
-    <string name="status_tab_settings">Settings Tab</string>
+    <!-- Status &amp; Announcements -->
+    <string name="status_tab_library">Library &amp; Audiobooks Tab</string>
+    <string name="status_tab_player">Full Audio Player Tab</string>
+    <string name="status_tab_studio">Voice Studio &amp; Style Tab</string>
+    <string name="status_tab_settings">Application Settings Tab</string>
     <string name="status_converting">Converting book to audio...</string>
-    <string name="status_conversion_success">Book converted successfully!</string>
-    <string name="status_conversion_error">Error during book conversion</string>
+    <string name="status_conversion_success">Audiobook generation complete! Saved to folder: %1$s</string>
+    <string name="status_conversion_error">Conversion halted: %1$s. Completed chapters preserved.</string>
     <string name="status_conversion_paused">Conversion paused</string>
+    <string name="status_book_deleted">Book deleted</string>
+    <string name="status_audio_not_available">Audio file for this chapter is not available</string>
+    <string name="toast_audio_missing">Audio file missing</string>
     <string name="toast_no_text_or_file">Please paste text or select a book file first</string>
     <string name="status_connection_success">Connected successfully to Gemini API!</string>
     <string name="status_connection_failed">Connection failed: %1$s</string>
     <string name="toast_key_saved">API Key saved successfully</string>
+    <string name="status_exporting_chapters">Exporting chapters to GeminiAudiobook directory...</string>
+    <string name="status_export_success">Successfully exported %1$d chapters to: %2$s</string>
+    <string name="status_export_no_chapters">No ready chapters found to export</string>
+    <string name="status_share_failed">Unable to share audio files</string>
+    <string name="status_resuming_book">Resuming remaining chapters for \'%1$s\'...</string>
+    <string name="status_select_original_file">Please select the original book file to resume synthesis.</string>
+
+    <!-- Paste Text Dialog Labels -->
+    <string name="paste_dialog_title">Synthesize Custom Text</string>
+    <string name="paste_dialog_hint_title">Segment Title (Optional)</string>
+    <string name="desc_paste_title">Optional segment title input field</string>
+    <string name="btn_paste_clipboard">Paste from Clipboard</string>
+    <string name="desc_paste_clipboard">Paste copied text directly from clipboard</string>
+    <string name="btn_dialogue_template">Dialogue Template</string>
+    <string name="desc_dialogue_template">Insert two-speaker dialogue test template</string>
+    <string name="paste_dialog_content_label">Text</string>
+    <string name="paste_dialog_content_hint">Enter or paste text here...</string>
+    <string name="desc_paste_content">Text input field to convert into audiobook</string>
+    <string name="char_count_format">Character count: %1$d</string>
+    <string name="dialogue_type_narrator">Text Type: Single Narrator</string>
+    <string name="dialogue_type_empty">Text Type: No text entered yet</string>
+    <string name="dialogue_type_detected">Audio Recognition: %1$s</string>
+    <string name="active_voice_preview">Narrator: %1$s | Style: %2$s%3$s</string>
+    <string name="toast_text_pasted">Text pasted successfully</string>
+
+    <!-- Voice Replication Dialog Labels -->
+    <string name="repl_dialog_title">Clone / Replicate Voice</string>
+    <string name="repl_dialog_subtitle">Clone real voice with voiceprint matching via Gemini 3.8 Flash TTS</string>
+    <string name="repl_label_voice_name">Voice Name:</string>
+    <string name="repl_hint_voice_name">e.g. Ahmed Voice</string>
+    <string name="repl_desc_voice_name">Voice name input field</string>
+    <string name="repl_label_ref_audio">1. Reference Audio Sample (10 to 30 seconds):</string>
+    <string name="repl_status_no_sample">No audio sample recorded or selected yet</string>
+    <string name="repl_btn_record_sample">Record Sample</string>
+    <string name="repl_desc_record_sample">Record reference audio sample from microphone</string>
+    <string name="repl_btn_pick_file">Choose File</string>
+    <string name="repl_desc_pick_file">Choose an audio file from device as reference sample</string>
+    <string name="repl_btn_preview_sample">Preview Sample</string>
+    <string name="repl_desc_preview_sample">Listen and preview recorded reference sample</string>
+    <string name="repl_label_consent">2. Audio Consent Statement (Required):</string>
+    <string name="repl_prompt_read_aloud">Read the following sentence aloud in English:</string>
+    <string name="repl_consent_text">I hereby confirm that I am the owner of this voice and I consent to Google using it to create a synthetic voice model.</string>
+    <string name="repl_consent_meaning">(Meaning: I verify that I own this voice and consent to Google using it to create a synthetic model)</string>
+    <string name="repl_btn_copy_phrase">Copy Phrase</string>
+    <string name="repl_desc_copy_phrase">Copy consent statement in English to clipboard</string>
+    <string name="repl_status_no_consent">Consent recording not submitted yet</string>
+    <string name="repl_btn_record_consent">Record Consent</string>
+    <string name="repl_desc_record_consent">Record reading of consent statement from microphone</string>
+    <string name="repl_desc_pick_consent">Choose consent recording audio file from device</string>
+    <string name="repl_btn_preview_consent">Preview Consent</string>
+    <string name="repl_desc_preview_consent">Listen and preview consent recording</string>
+    <string name="repl_btn_start">Start Replication &amp; Save Voice</string>
+    <string name="repl_desc_start">Submit sample and consent to begin AI voice cloning</string>
+    <string name="repl_desc_cancel">Cancel voice replication dialog</string>
+
+    <!-- Additional Announcements &amp; Dialog Strings -->
+    <string name="toast_empty_audio_file">Audio file is empty or could not be played</string>
+    <string name="toast_error_reading_file">Could not read file: %1$s</string>
+    <string name="toast_cannot_open_file_picker">Cannot open file picker</string>
+    <string name="announce_rewind_15">Rewound 15 seconds</string>
+    <string name="announce_forward_30">Fast forwarded 30 seconds</string>
+    <string name="announce_require_api_key_sync">Please set your Gemini API key in Settings first to sync voices</string>
+    <string name="toast_require_api_key">Please configure your API key in Settings first</string>
+    <string name="announce_syncing_voices">Syncing designed voices from Google Cloud...</string>
+    <string name="announce_sync_voices_found">Found and synced %1$d custom voices!</string>
+    <string name="announce_sync_voices_none">No custom voices found for this key</string>
+    <string name="announce_sync_voices_failed">Failed to sync voices: %1$s</string>
+    <string name="toast_sync_voices_error">Sync error: %1$s</string>
+    <string name="announce_narrator_selected">Narrator voice selected: %1$s</string>
+    <string name="announce_character_selected">Character voice selected: %1$s</string>
+    <string name="announce_style_selected">Delivery style selected: %1$s</string>
+    <string name="announce_multi_speaker_on">Multi-speaker dialogue enabled</string>
+    <string name="announce_multi_speaker_off">Multi-speaker dialogue disabled</string>
+    <string name="voice_picker_title_narrator">Select Primary Narrator Voice</string>
+    <string name="voice_picker_title_character">Select Character Voice</string>
+    <string name="voice_picker_add_custom_manual">+ Enter Custom Voice ID Manually</string>
+    <string name="voice_picker_sync_cloud">🔄 Sync Voices from Cloud</string>
+    <string name="voice_badge_replicated">[Replicated]</string>
+    <string name="voice_badge_designed">[Designed]</string>
+    <string name="style_picker_title">Select Voice Delivery Style</string>
+    <string name="dialogue_help_title">Multi-Speaker Dialogue Guide</string>
+    <string name="dialogue_help_msg">How to format multi-speaker stories for Gemini TTS:\n\n1. Use quotation marks for dialogue:\n   - Character speech will automatically use the Character voice.\n   - General text outside quotes will use the Narrator voice.\n\n2. Supported quote marks:\n   - English quotes: \"...\"\n   - Arabic quotes: «...» or “...”\n\n3. Dash dialogue formatting is also supported:\n   - — Where are you going?\n   - — To the library.</string>
+    <string name="custom_instructions_title">Custom Voice Instructions</string>
+    <string name="custom_instructions_hint">e.g. Read slowly with dramatic pauses, emphasize historical names</string>
+    <string name="custom_instructions_clear">Clear Instructions</string>
+    <string name="audition_generating">Generating voice audition sample...</string>
+    <string name="audition_success">Playing voice sample...</string>
+    <string name="audition_failed">Failed to audition voice: %1$s</string>
+    <string name="audition_text">Welcome to Gemini Audiobook. This is a preview of the selected voice style and delivery tone.</string>
+    <string name="design_generating">Designing new custom voice with Gemini AI...</string>
+    <string name="design_success">Custom voice created successfully!</string>
+    <string name="design_failed">Failed to create custom voice: %1$s</string>
+    <string name="repl_starting">Analyzing voice sample and cloning voice...</string>
+    <string name="repl_success">Voice cloned and registered successfully!</string>
+    <string name="repl_failed">Failed to replicate voice: %1$s</string>
+    <string name="repl_error_missing_sample">Please record or choose a reference audio sample first</string>
+    <string name="repl_error_missing_consent">Please record or choose the consent statement audio</string>
+    <string name="repl_sample_selected">Audio sample ready (%1$d KB)</string>
+    <string name="repl_consent_selected">Consent statement ready (%1$d KB)</string>
+    <string name="api_key_test_running">Testing connection to Gemini API...</string>
+    <string name="api_key_test_success">API connection successful!</string>
+    <string name="api_key_test_failed">Connection test failed: %1$s</string>
+    <string name="updates_checking">Checking for new app updates...</string>
+    <string name="updates_latest">You are running the latest version (%1$s)</string>
+    <string name="updates_failed">Failed to check for updates: %1$s</string>
+    <string name="updates_available_title">New Update Available (%1$s)</string>
+    <string name="updates_action_install">Download &amp; Install</string>
+    <string name="updates_action_later">Later</string>
+    <string name="settings_keys_status_single">Key: %1$s</string>
+    <string name="settings_keys_status_multi">Keys: %1$s (+%2$d more)</string>
+    <string name="settings_keys_desc_format">API Keys: %1$d registered, first key: %2$s</string>
+    <string name="model_selected_format">Model selected: %1$s</string>
+    <string name="model_picker_title">Select AI Model</string>
+    <string name="paste_dialog_template_text">Narrator: The morning dawned quietly over the ancient hills.\n\n«Are you ready for the journey ahead?» asked Tariq with quiet determination.\n\n«I have prepared the caravan for every possibility,» replied the sage with a calm smile.</string>
+    <string name="paste_dialog_pasted_announcement">Pasted %1$d characters from clipboard. %2$s</string>
+    <string name="book_processing_started">Starting conversion for \'%1$s\'...</string>
+    <string name="book_retry_started">Retrying conversion for \'%1$s\'...</string>
+    <string name="toast_keys_required_conversion">Please enter Gemini API keys in Settings first to convert books</string>
+
+    <!-- Additional Localization Strings -->
+    <string name="dialog_enter_voice_id_desc">Custom Voice ID input field</string>
+    <string name="voice_manual_apply">Apply Voice</string>
+    <string name="toast_require_voice_id">Please enter a Voice ID</string>
+    <string name="format_custom_voice_name">Custom Voice (%1$s)</string>
+    <string name="format_custom_voice_desc">Manually entered custom Voice ID</string>
+    <string name="announce_custom_voice_activated">Custom Voice activated: %1$s</string>
+    <string name="toast_custom_voice_activated">Custom Voice activated successfully</string>
+    <string name="custom_instructions_desc">Custom voice instructions input field</string>
+    <string name="announce_custom_instructions_saved">Custom voice instructions saved successfully</string>
+    <string name="toast_custom_instructions_saved">Custom voice instructions saved</string>
+    <string name="announce_custom_instructions_cleared">Custom voice instructions cleared</string>
+    <string name="toast_custom_instructions_cleared">Custom voice instructions cleared</string>
+    <string name="dialogue_help_btn_copy">Copy Sample Template</string>
+    <string name="announce_dialogue_template_copied">Sample dialogue template copied to clipboard</string>
+    <string name="toast_dialogue_template_copied">Sample template copied to clipboard</string>
+    <string name="audition_sample_single_format">Hello Ahmed! This is an AI voice preview test in %1$s style.</string>
+    <string name="audition_sample_multi_speaker_1">Speaker1: Hello Ahmed! This is a test for the narrator voice in %1$s style.</string>
+    <string name="audition_sample_multi_speaker_2">Speaker2: Glad to be here! And this tests the character voice for smooth multi-speaker dialogue.</string>
+    <string name="dialog_voice_design_name_label">Voice Name:</string>
+    <string name="dialog_voice_design_prompt_label">Voice Description (in English):</string>
+    <string name="toast_voice_design_blank">Please enter both voice name and prompt description</string>
+    <string name="announce_voice_design_wait">Designing new AI voice... Please wait</string>
+    <string name="toast_voice_design_wait">Designing voice and generating audition sample...</string>
+    <string name="error_voice_design_no_id">Server did not return a Voice ID</string>
+    <string name="repl_toast_consent_copied">Consent statement copied to clipboard</string>
+    <string name="repl_status_recording_sample">Recording... Speak naturally for 10-30 seconds</string>
+    <string name="repl_status_sample_recorded">Sample recorded successfully (%1$d KB)</string>
+    <string name="repl_status_sample_file_chosen">Selected file: %1$s (%2$d KB)</string>
+    <string name="repl_status_recording_consent">Recording... Read the English consent text aloud</string>
+    <string name="repl_status_consent_recorded">Consent recorded successfully (%1$d KB)</string>
+    <string name="repl_status_consent_file_chosen">Selected consent file: %1$s (%2$d KB)</string>
+    <string name="repl_btn_record_sample_stop">Stop (%1$d s)</string>
+    <string name="repl_btn_record_sample_again">Record Again</string>
+    <string name="repl_btn_preview_sample_play">Preview Audio Sample</string>
+    <string name="repl_btn_preview_sample_stop">Stop Preview</string>
+    <string name="repl_btn_preview_consent_play">Preview Consent Recording</string>
+    <string name="repl_btn_preview_consent_stop">Stop Preview</string>
+    <string name="repl_btn_submit_running">Replicating and matching...</string>
+    <string name="repl_status_low_audio">Not enough audio captured. Please try again.</string>
+    <string name="repl_status_low_consent">Consent audio not captured. Please try again.</string>
+    <string name="toast_mic_perm_required">Microphone permission is required to record audio</string>
+    <string name="toast_cannot_start_recording">Cannot start recording. Check microphone permissions.</string>
+    <string name="storage_perm_dialog_title">All Files Access Permission</string>
+    <string name="storage_perm_dialog_msg">To allow the app to save audiobook chapters directly into the \'GeminiAudiobook\' folder on your internal storage, please enable \'Allow access to manage all files\' in the following settings screen.</string>
+    <string name="storage_perm_btn_settings">Go to Settings &amp; Enable</string>
+    <string name="storage_perm_btn_later">Later</string>
+    <string name="storage_perm_already_granted">All files access permission is already enabled. Books are saved in the GeminiAudiobook folder on internal storage.</string>
+    <string name="toast_storage_perm_already_granted">Permission already enabled</string>
+    <string name="dialog_api_keys_title">Manage Gemini API Keys</string>
+    <string name="dialog_api_keys_hint">Enter one or more Gemini API keys (one per line)</string>
+    <string name="dialog_api_keys_desc">Gemini API keys input field. Enter one key per line.</string>
+    <string name="btn_paste_from_clipboard">Paste from Clipboard</string>
+    <string name="desc_paste_from_clipboard">Paste a new key from clipboard and append it to the list</string>
+    <string name="announce_key_pasted_success">Key from clipboard added to list successfully</string>
+    <string name="announce_key_already_in_list">Key already exists in the list</string>
+    <string name="announce_clipboard_no_valid_key">Clipboard does not contain a valid API key starting with AIzaSy</string>
+    <string name="toast_clipboard_no_valid_key">Clipboard empty or has no valid key</string>
+    <string name="announce_keys_saved_count">Saved %1$d API keys successfully</string>
+    <string name="toast_keys_saved_count">Saved %1$d keys</string>
+    <string name="announce_test_keys_running">Testing %1$d API keys with Google servers...</string>
+    <string name="test_keys_audio_text">API key connection test</string>
+    <string name="test_keys_success_msg">Keys tested successfully! Connection working (%1$d keys ready).</string>
+    <string name="test_keys_dialog_title">Connection Status</string>
+    <string name="paste_active_voice_format">Narrator: %1$s | Style: %2$s%3$s</string>
+    <string name="paste_multi_suffix"> | Multi-Speaker</string>
+    <string name="btn_convert_save_library">Convert &amp; Save to Library</string>
+    <string name="status_importing_book">Importing book and reading file...</string>
+    <string name="toast_unsupported_file_type">Unsupported file type. Please choose a .txt, .md, or .docx file.</string>
+    <string name="toast_file_empty">The selected file is empty!</string>
+    <string name="status_converting_book_format">Converting chapters of &quot;%1$s&quot; using Gemini AI (Style: %2$s)...</string>
+    <string name="status_converting_chapter_format">Converting chapter %1$d of %2$d: %3$s</string>
+    <string name="player_progress_format">Chapter %1$d of %2$d</string>
+    <string name="announce_playing_format">Playing: %1$s - %2$s</string>
+    <string name="announce_playback_paused">Playback paused</string>
+    <string name="announce_playback_resumed">Playing</string>
+    <string name="announce_end_of_book">Reached end of book</string>
+    <string name="announce_already_first_chapter">You are already on the first chapter</string>
+    <string name="announce_reading_speed_format">Reading speed: %1$.2fx</string>
+    <string name="updates_dialog_body_format">%1$s
+
+Would you like to download and install the update now?</string>
+    <string name="updates_downloading_title">Downloading update v%1$s</string>
+    <string name="updates_action_cancel_download">Cancel Download</string>
+    <string name="updates_cancelled_announcement">Update download cancelled</string>
+    <string name="updates_started_announcement">Started downloading update v%1$s... Please wait</string>
+    <string name="updates_progress_text_format">Downloaded %.1f of %.1f MB (%d%%)</string>
+    <string name="updates_percent_announcement">Download progress: %1$d%%</string>
+    <string name="notification_channel_name">Audiobook Playback</string>
+    <string name="notification_channel_desc">Background playback controls and announcements for audiobooks</string>
+    <string name="share_chapters_chooser_title">Share chapters: %1$s</string>
+    <string name="default_book_title">Audiobook</string>
+    <string name="default_chapter_title_format">Chapter %1$d</string>
 </resources>

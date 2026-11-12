@@ -95,8 +95,8 @@ class AudiobookPlayerService : MediaSessionService(), Player.Listener {
         val action = intent.action
         if (action == ACTION_PLAY_CHAPTER) {
             val audioPath = intent.getStringExtra(EXTRA_AUDIO_PATH) ?: ""
-            currentBookTitle = intent.getStringExtra(EXTRA_BOOK_TITLE) ?: "كتاب صوتي"
-            currentChapterTitle = intent.getStringExtra(EXTRA_CHAPTER_TITLE) ?: "فصل"
+            currentBookTitle = intent.getStringExtra(EXTRA_BOOK_TITLE) ?: getString(R.string.default_book_title)
+            currentChapterTitle = intent.getStringExtra(EXTRA_CHAPTER_TITLE) ?: getString(R.string.default_chapter_title_format, 1)
             currentChapterIndex = intent.getIntExtra(EXTRA_CHAPTER_INDEX, 1)
 
             if (audioPath.isNotEmpty()) {
@@ -203,10 +203,10 @@ class AudiobookPlayerService : MediaSessionService(), Player.Listener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "تشغيل الكتب الصوتية",
+                getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "إشعارات التحكم في مشغل الكتاب الصوتي بالخلفية"
+                description = getString(R.string.notification_channel_desc)
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)

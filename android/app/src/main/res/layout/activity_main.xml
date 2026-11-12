@@ -102,7 +102,7 @@
                     android:textColor="@color/primary_accessible"
                     android:textSize="15sp"
                     android:textStyle="bold"
-                    android:text="يوجد كتاب غير مكتمل" />
+                    android:text="@string/card_resume_title" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -118,8 +118,8 @@
                         android:minHeight="48dp"
                         android:minWidth="48dp"
                         android:layout_marginEnd="8dp"
-                        android:text="تجاهل"
-                        android:contentDescription="تجاهل تنبيه استئناف الكتاب"
+                        android:text="@string/action_dismiss_resume"
+                        android:contentDescription="@string/action_dismiss_resume"
                         android:textColor="@color/text_high_contrast"
                         android:backgroundTint="@color/divider_color" />
 
@@ -129,8 +129,8 @@
                         android:layout_height="wrap_content"
                         android:minHeight="48dp"
                         android:minWidth="48dp"
-                        android:text="استئناف التحويل"
-                        android:contentDescription="استئناف تحويل الكتاب غير المكتمل الآن"
+                        android:text="@string/action_resume_conversion"
+                        android:contentDescription="@string/action_resume_conversion"
                         android:textColor="@color/on_primary"
                         android:backgroundTint="@color/primary_accessible" />
                 </LinearLayout>
@@ -175,7 +175,7 @@
                     android:id="@+id/textNowPlayingTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="لا يوجد كتاب قيد التشغيل حالياً"
+                    android:text="@string/player_no_book_playing"
                     android:textColor="@color/text_high_contrast"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -185,7 +185,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="اختر كتاباً من القائمة لبدء الاستماع"
+                    android:text="@string/player_select_book_hint"
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
@@ -259,7 +259,7 @@
                         android:id="@+id/textPlayerBookTitle"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="لا يوجد كتاب"
+                        android:text="@string/mini_player_no_book"
                         android:textColor="@color/text_high_contrast"
                         android:textSize="20sp"
                         android:textStyle="bold" />
@@ -269,7 +269,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="اختر كتاباً من المكتبة"
+                        android:text="@string/mini_player_select_hint"
                         android:textColor="@color/accent_control"
                         android:textSize="16sp" />
 
@@ -298,7 +298,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:minHeight="52dp"
-                        android:text="السابق"
+                        android:text="@string/player_btn_prev"
                         android:contentDescription="@string/action_prev_chapter"
                         android:textColor="@color/text_high_contrast"
                         android:backgroundTint="@color/divider_color" />
@@ -310,7 +310,7 @@
                         android:layout_weight="1"
                         android:minHeight="52dp"
                         android:layout_marginStart="6dp"
-                        android:text="-15ث"
+                        android:text="@string/player_btn_rewind"
                         android:contentDescription="@string/action_rewind"
                         android:textColor="@color/text_high_contrast"
                         android:backgroundTint="@color/divider_color" />
@@ -336,7 +336,7 @@
                         android:layout_weight="1"
                         android:minHeight="52dp"
                         android:layout_marginStart="6dp"
-                        android:text="+30ث"
+                        android:text="@string/player_btn_forward"
                         android:contentDescription="@string/action_fast_forward"
                         android:textColor="@color/text_high_contrast"
                         android:backgroundTint="@color/divider_color" />
@@ -348,7 +348,7 @@
                         android:layout_weight="1"
                         android:minHeight="52dp"
                         android:layout_marginStart="6dp"
-                        android:text="التالي"
+                        android:text="@string/player_btn_next"
                         android:contentDescription="@string/action_next_chapter"
                         android:textColor="@color/text_high_contrast"
                         android:backgroundTint="@color/divider_color" />
@@ -363,7 +363,7 @@
                     android:minHeight="48dp"
                     android:layout_marginTop="20dp"
                     android:text="@string/action_speed"
-                    android:contentDescription="تغيير سرعة القراءة الصوتية"
+                    android:contentDescription="@string/desc_change_speed"
                     android:textColor="@color/accent_control"
                     android:backgroundTint="@color/surface_dark" />
 
@@ -408,8 +408,8 @@
                     android:layout_height="wrap_content"
                     android:minHeight="52dp"
                     android:layout_marginTop="6dp"
-                    android:text="صوت الراوي: شارون (Charon)"
-                    android:contentDescription="زر اختيار صوت الراوي الأساسي"
+                    android:text="@string/label_narrator_voice"
+                    android:contentDescription="@string/desc_select_narrator_voice"
                     android:textColor="@color/text_high_contrast"
                     android:backgroundTint="@color/surface_dark" />
 
@@ -429,8 +429,8 @@
                     android:layout_height="wrap_content"
                     android:minHeight="52dp"
                     android:layout_marginTop="6dp"
-                    android:text="النمط: طبيعي ومتوازن (افتراضي)"
-                    android:contentDescription="زر اختيار نمط الإلقاء الصوتي"
+                    android:text="@string/label_voice_style"
+                    android:contentDescription="@string/desc_select_voice_style"
                     android:textColor="@color/text_high_contrast"
                     android:backgroundTint="@color/surface_dark" />
 
@@ -441,8 +441,8 @@
                     android:layout_height="wrap_content"
                     android:minHeight="52dp"
                     android:layout_marginTop="8dp"
-                    android:text="التعليمات المخصصة للصوت: غير محددة"
-                    android:contentDescription="زر ضبط تعليمات وتوجيهات الأداء الصوتي المخصصة"
+                    android:text="@string/label_instructions_none"
+                    android:contentDescription="@string/desc_custom_voice_instructions"
                     android:textColor="@color/text_high_contrast"
                     android:backgroundTint="@color/surface_dark" />
 
@@ -462,8 +462,8 @@
                     android:layout_height="wrap_content"
                     android:minHeight="52dp"
                     android:layout_marginTop="8dp"
-                    android:text="الحوار متعدد الرواة: معطل"
-                    android:contentDescription="تبديل حالة الحوار متعدد الرواة"
+                    android:text="@string/multi_speaker_disabled"
+                    android:contentDescription="@string/desc_toggle_multi_speaker"
                     android:textColor="@color/accent_control"
                     android:backgroundTint="@color/surface_dark" />
 
@@ -474,8 +474,8 @@
                     android:minHeight="52dp"
                     android:layout_marginTop="8dp"
                     android:visibility="gone"
-                    android:text="صوت الشخصيات: كوري (Kore)"
-                    android:contentDescription="زر اختيار صوت شخصيات الحوار"
+                    android:text="@string/label_character_voice"
+                    android:contentDescription="@string/desc_select_character_voice"
                     android:textColor="@color/text_high_contrast"
                     android:backgroundTint="@color/surface_dark" />
 
@@ -486,8 +486,8 @@
                     android:minHeight="48dp"
                     android:layout_marginTop="8dp"
                     android:visibility="gone"
-                    android:text="دليل صيغة الحوار"
-                    android:contentDescription="شرح طريقة كتابة الحوار المتعدد لنموذج جوجل"
+                    android:text="@string/btn_dialogue_help"
+                    android:contentDescription="@string/desc_dialogue_help"
                     android:textColor="@color/accent_control"
                     android:backgroundTint="@color/divider_color" />
 
@@ -583,7 +583,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="جاري التحقق من المفتاح..."
+                        android:text="@string/status_checking_key"
                         android:textColor="@color/text_secondary"
                         android:textSize="14sp" />
 

@@ -210,11 +210,11 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 if (bytes != null && bytes.isNotEmpty()) {
                     onAudioPickedCallback?.invoke(bytes, name)
                 } else {
-                    Toast.makeText(this, "الملف الصوتي فارغ أو تعذر قراءته", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.toast_empty_audio_file), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read audio file: ${e.message}")
-                Toast.makeText(this, "تعذر قراءة الملف: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_error_reading_file, e.message ?: ""), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -367,7 +367,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 ))
             } catch (e: Exception) {
                 Log.e(TAG, "Error launching file picker: ${e.message}")
-                Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_cannot_open_file_picker), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -392,7 +392,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             mediaController?.let { mc ->
                 val newPos = (mc.currentPosition - 15000L).coerceAtLeast(0L)
                 mc.seekTo(newPos)
-                announceStatus("تم إرجاع 15 ثانية")
+                announceStatus(getString(R.string.announce_rewind_15))
             }
         }
 
@@ -400,7 +400,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             mediaController?.let { mc ->
                 val newPos = mc.currentPosition + 30000L
                 mc.seekTo(newPos)
-                announceStatus("تم تقديم 30 ثانية")
+                announceStatus(getString(R.string.announce_forward_30))
             }
         }
 
@@ -560,14 +560,14 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val keys = getStoredApiKeys()
         if (keys.isEmpty()) {
             if (userTriggered) {
-                announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لمزامنة الأصوات")
-                Toast.makeText(this, "يرجى تسجيل المفتاح في الإعدادات أولاً", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.announce_require_api_key_sync))
+                Toast.makeText(this, getString(R.string.toast_require_api_key), Toast.LENGTH_SHORT).show()
             }
             return
         }
 
         if (userTriggered) {
-            announceStatus("جارِ مزامنة واسترجاع الأصوات المصممة من حسابك على Google...")
+            announceStatus(getString(R.string.announce_syncing_voices))
         }
 
         lifecycleScope.launch {
@@ -579,20 +579,21 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                     customVoices.addAll(fetched)
                     saveCustomVoicesToPrefs(fetched)
                     updateStudioUI()
-                    val msg = "تم العثور على ${fetched.size} أصوات مصممة خاصة بمفتاحك ومزامنتها بنجاح!"
+                    val msg = getString(R.string.announce_sync_voices_found, fetched.size)
                     announceStatus(msg)
                     if (userTriggered) {
                         Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                     }
                 } else if (userTriggered) {
-                    announceStatus("لم يتم العثور على أصوات مصممة محفوظة على هذا المفتاح حتى الآن")
-                    Toast.makeText(this@MainActivity, "لم يتم العثور على أصوات مصممة محفوظة", Toast.LENGTH_SHORT).show()
+                    announceStatus(getString(R.string.announce_sync_voices_none))
+                    Toast.makeText(this@MainActivity, getString(R.string.announce_sync_voices_none), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to fetch custom voices: ${e.message}")
                 if (userTriggered) {
-                    announceStatus("تعذر مزامنة الأصوات: ${e.localizedMessage ?: e.message}")
-                    Toast.makeText(this@MainActivity, "خطأ في المزامنة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                    val errMsg = e.localizedMessage ?: (e.message ?: "")
+                    announceStatus(getString(R.string.announce_sync_voices_failed, errMsg))
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_sync_voices_error, errMsg), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -604,67 +605,87 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         return VoiceProfile.fromStoredString(id)
     }
 
+    private fun isCurrentLocaleArabic(): Boolean {
+        val currentLocales = AppCompatDelegate.getApplicationLocales()
+        if (!currentLocales.isEmpty) {
+            val tag = currentLocales.get(0)?.language ?: ""
+            return tag.startsWith("ar", ignoreCase = true)
+        }
+        val configLocale = resources.configuration.locales.get(0)
+        return configLocale.language.startsWith("ar", ignoreCase = true)
+    }
+
     private fun updateStudioUI() {
+        val isArabic = isCurrentLocaleArabic()
         val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
         val narratorProfile = getVoiceProfile(narratorId)
-        btnSelectNarratorVoice.text = "الراوي: ${narratorProfile.displayNameArabic}"
-        btnSelectNarratorVoice.contentDescription = "صوت الراوي: ${narratorProfile.displayNameArabic}"
+        val narratorName = narratorProfile.displayName(isArabic)
+        btnSelectNarratorVoice.text = String.format(getString(R.string.label_narrator_format), narratorName)
+        btnSelectNarratorVoice.contentDescription = btnSelectNarratorVoice.text
 
         val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
         val stylePreset = VoiceStylePreset.fromId(styleId)
-        btnSelectVoiceStyle.text = "النمط: ${stylePreset.titleArabic}"
-        btnSelectVoiceStyle.contentDescription = "نمط الإلقاء: ${stylePreset.titleArabic}"
+        val styleName = stylePreset.title(isArabic)
+        btnSelectVoiceStyle.text = String.format(getString(R.string.label_style_format), styleName)
+        btnSelectVoiceStyle.contentDescription = btnSelectVoiceStyle.text
 
         val customInst = settingsPrefs.getString(KEY_CUSTOM_VOICE_INSTRUCTIONS, null)
         if (!customInst.isNullOrBlank()) {
-            btnCustomVoiceInstructions.text = "التعليمات: مخصصة (انقر للتعديل)"
-            btnCustomVoiceInstructions.contentDescription = "التعليمات المخصصة للصوت: $customInst"
+            btnCustomVoiceInstructions.text = getString(R.string.label_instructions_custom)
+            btnCustomVoiceInstructions.contentDescription = "${getString(R.string.label_instructions_custom)}: $customInst"
         } else {
-            btnCustomVoiceInstructions.text = "التعليمات المخصصة للصوت: غير محددة"
-            btnCustomVoiceInstructions.contentDescription = "التعليمات المخصصة للصوت غير محددة، انقر للإضافة"
+            btnCustomVoiceInstructions.text = getString(R.string.label_instructions_none)
+            btnCustomVoiceInstructions.contentDescription = getString(R.string.label_instructions_none)
         }
 
         val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
-        btnToggleMultiSpeaker.text = if (isMultiSpeaker) "الحوار: مفعّل" else "الحوار: معطّل"
-        btnToggleMultiSpeaker.contentDescription = "الحوار المتعدد: ${if (isMultiSpeaker) "مفعل" else "معطل"}"
+        btnToggleMultiSpeaker.text = if (isMultiSpeaker) getString(R.string.multi_speaker_enabled) else getString(R.string.multi_speaker_disabled)
+        btnToggleMultiSpeaker.contentDescription = btnToggleMultiSpeaker.text
         btnSelectCharacterVoice.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
         btnMultiSpeakerHelp.visibility = if (isMultiSpeaker) View.VISIBLE else View.GONE
 
         val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
         val characterProfile = getVoiceProfile(characterId)
-        btnSelectCharacterVoice.text = "الشخصيات: ${characterProfile.displayNameArabic}"
-        btnSelectCharacterVoice.contentDescription = "صوت الشخصيات: ${characterProfile.displayNameArabic}"
+        val characterName = characterProfile.displayName(isArabic)
+        btnSelectCharacterVoice.text = String.format(getString(R.string.label_character_format), characterName)
+        btnSelectCharacterVoice.contentDescription = btnSelectCharacterVoice.text
     }
 
     private fun showNarratorVoicePicker() {
+        val isArabic = isCurrentLocaleArabic()
         val combinedVoices = mutableListOf<VoiceProfile>()
         combinedVoices.addAll(customVoices)
         combinedVoices.addAll(VoiceProfile.PREBUILT_VOICES)
 
         val displayItems = mutableListOf<String>()
         for (v in customVoices) {
-            val badge = if (v.descriptionArabic.contains("مستنسخ") || v.descriptionArabic.contains("Replicated")) "[مستنسخ]" else "[مصمم]"
-            displayItems.add("⭐ $badge ${v.displayNameArabic}")
+            val desc = v.description(isArabic)
+            val badge = if (desc.contains("مستنسخ") || desc.contains("Replicated", ignoreCase = true)) {
+                getString(R.string.voice_badge_replicated)
+            } else {
+                getString(R.string.voice_badge_designed)
+            }
+            displayItems.add("⭐ $badge ${v.displayName(isArabic)}")
         }
         for (v in VoiceProfile.PREBUILT_VOICES) {
-            displayItems.add("${v.displayNameArabic} (${v.descriptionArabic})")
+            displayItems.add("${v.displayName(isArabic)} (${v.description(isArabic)})")
         }
-        displayItems.add("+ إدخال معرف صوت مخصص يدوياً (Voice ID)")
-        displayItems.add("🔄 مزامنة واسترجاع الأصوات من السحابة")
+        displayItems.add(getString(R.string.voice_picker_add_custom_manual))
+        displayItems.add(getString(R.string.voice_picker_sync_cloud))
 
         val currentVoiceId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
         var selectedIdx = combinedVoices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
         if (selectedIdx < 0) selectedIdx = customVoices.size
 
         AlertDialog.Builder(this)
-            .setTitle("اختر صوت الراوي الأساسي")
+            .setTitle(R.string.voice_picker_title_narrator)
             .setSingleChoiceItems(displayItems.toTypedArray(), selectedIdx) { dialog, which ->
                 when {
                     which < combinedVoices.size -> {
                         val chosen = combinedVoices[which]
                         settingsPrefs.edit().putString(KEY_GEMINI_VOICE, chosen.id).apply()
                         updateStudioUI()
-                        announceStatus("تم اختيار صوت الراوي: ${chosen.displayNameArabic}")
+                        announceStatus(getString(R.string.announce_narrator_selected, chosen.displayName(isArabic)))
                         dialog.dismiss()
                     }
                     which == combinedVoices.size -> {
@@ -682,34 +703,40 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     }
 
     private fun showCharacterVoicePicker() {
+        val isArabic = isCurrentLocaleArabic()
         val combinedVoices = mutableListOf<VoiceProfile>()
         combinedVoices.addAll(customVoices)
         combinedVoices.addAll(VoiceProfile.PREBUILT_VOICES)
 
         val displayItems = mutableListOf<String>()
         for (v in customVoices) {
-            val badge = if (v.descriptionArabic.contains("مستنسخ") || v.descriptionArabic.contains("Replicated")) "[مستنسخ]" else "[مصمم]"
-            displayItems.add("⭐ $badge ${v.displayNameArabic}")
+            val desc = v.description(isArabic)
+            val badge = if (desc.contains("مستنسخ") || desc.contains("Replicated", ignoreCase = true)) {
+                getString(R.string.voice_badge_replicated)
+            } else {
+                getString(R.string.voice_badge_designed)
+            }
+            displayItems.add("⭐ $badge ${v.displayName(isArabic)}")
         }
         for (v in VoiceProfile.PREBUILT_VOICES) {
-            displayItems.add("${v.displayNameArabic} (${v.descriptionArabic})")
+            displayItems.add("${v.displayName(isArabic)} (${v.description(isArabic)})")
         }
-        displayItems.add("+ إدخال معرف صوت مخصص يدوياً (Voice ID)")
-        displayItems.add("🔄 مزامنة واسترجاع الأصوات من السحابة")
+        displayItems.add(getString(R.string.voice_picker_add_custom_manual))
+        displayItems.add(getString(R.string.voice_picker_sync_cloud))
 
         val currentVoiceId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
         var selectedIdx = combinedVoices.indexOfFirst { it.id.equals(currentVoiceId, ignoreCase = true) }
         if (selectedIdx < 0) selectedIdx = if (customVoices.isNotEmpty()) customVoices.size + 1 else 1
 
         AlertDialog.Builder(this)
-            .setTitle("اختر صوت شخصيات الحوار")
+            .setTitle(R.string.voice_picker_title_character)
             .setSingleChoiceItems(displayItems.toTypedArray(), selectedIdx) { dialog, which ->
                 when {
                     which < combinedVoices.size -> {
                         val chosen = combinedVoices[which]
                         settingsPrefs.edit().putString(KEY_CHARACTER_VOICE, chosen.id).apply()
                         updateStudioUI()
-                        announceStatus("تم اختيار صوت الشخصيات: ${chosen.displayNameArabic}")
+                        announceStatus(getString(R.string.announce_character_selected, chosen.displayName(isArabic)))
                         dialog.dismiss()
                     }
                     which == combinedVoices.size -> {
@@ -728,26 +755,28 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
     private fun showManualVoiceIdDialog(isCharacter: Boolean) {
         val input = EditText(this).apply {
-            hint = "أدخل معرف الصوت (مثال: voice_42n103zlznqt)"
-            contentDescription = "حقل إدخال معرف الصوت المخصص"
+            hint = getString(R.string.dialog_enter_voice_id_hint)
+            contentDescription = getString(R.string.dialog_enter_voice_id_desc)
             val pad = (16 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad, pad, pad)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("إدخال معرف صوت مخصص (Voice ID)")
+            .setTitle(R.string.dialog_enter_voice_id_title)
             .setView(input)
-            .setPositiveButton("اعتماد الصوت") { _, _ ->
+            .setPositiveButton(R.string.voice_manual_apply) { _, _ ->
                 val enteredId = input.text.toString().trim()
                 if (enteredId.isBlank()) {
-                    Toast.makeText(this, "يرجى إدخال معرف الصوت", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.toast_require_voice_id), Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 val newProfile = VoiceProfile(
                     id = enteredId,
                     displayNameArabic = "صوت مخصص ($enteredId)",
+                    displayNameEnglish = "Custom Voice ($enteredId)",
                     isCustomVoiceDesign = true,
-                    descriptionArabic = "معرف مخصص مدخل يدوياً"
+                    descriptionArabic = "معرف مخصص مدخل يدوياً",
+                    descriptionEnglish = "Manually entered custom Voice ID"
                 )
                 if (customVoices.none { it.id.equals(enteredId, ignoreCase = true) }) {
                     customVoices.add(0, newProfile)
@@ -756,27 +785,28 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 val prefKey = if (isCharacter) KEY_CHARACTER_VOICE else KEY_GEMINI_VOICE
                 settingsPrefs.edit().putString(prefKey, enteredId).apply()
                 updateStudioUI()
-                announceStatus("تم تفعيل الصوت المخصص: $enteredId")
-                Toast.makeText(this, "تم تفعيل الصوت المخصص بنجاح", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.announce_custom_voice_activated, enteredId))
+                Toast.makeText(this, getString(R.string.toast_custom_voice_activated), Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     private fun showVoiceStylePicker() {
+        val isArabic = isCurrentLocaleArabic()
         val styles = VoiceStylePreset.entries.toTypedArray()
-        val displayItems = styles.map { "${it.titleArabic}: ${it.descriptionArabic}" }.toTypedArray()
+        val displayItems = VoiceStylePreset.getAccessibleDisplayList(isArabic)
         val currentStyleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
         var selectedIdx = styles.indexOfFirst { it.id.equals(currentStyleId, ignoreCase = true) }
         if (selectedIdx < 0) selectedIdx = 0
 
         AlertDialog.Builder(this)
-            .setTitle("اختر نمط الإلقاء الصوتي")
+            .setTitle(R.string.style_picker_title)
             .setSingleChoiceItems(displayItems, selectedIdx) { dialog, which ->
                 val chosen = styles[which]
                 settingsPrefs.edit().putString(KEY_VOICE_STYLE, chosen.id).apply()
                 updateStudioUI()
-                announceStatus("تم اختيار نمط الإلقاء: ${chosen.titleArabic}")
+                announceStatus(getString(R.string.announce_style_selected, chosen.title(isArabic)))
                 dialog.dismiss()
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -786,34 +816,34 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private fun showCustomVoiceInstructionsDialog() {
         val currentInstructions = settingsPrefs.getString(KEY_CUSTOM_VOICE_INSTRUCTIONS, "") ?: ""
         val input = EditText(this).apply {
-            hint = "اكتب توجيهات الأداء الصوتي (مثال: تحدث بهدوء ورزانة وبنبرة دافئة ووقورة ملائمة للكتب التاريخية)..."
+            hint = getString(R.string.custom_instructions_hint)
             setText(currentInstructions)
-            contentDescription = "حقل إدخال التعليمات المخصصة لأداء الصوت"
+            contentDescription = getString(R.string.custom_instructions_desc)
             minLines = 3
             val pad = (16 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad, pad, pad)
         }
 
         AlertDialog.Builder(this)
-            .setTitle("التعليمات المخصصة للصوت")
+            .setTitle(R.string.custom_instructions_title)
             .setView(input)
             .setPositiveButton(R.string.action_save) { _, _ ->
                 val newInstructions = input.text.toString().trim()
                 if (newInstructions.isNotBlank()) {
                     settingsPrefs.edit().putString(KEY_CUSTOM_VOICE_INSTRUCTIONS, newInstructions).apply()
-                    announceStatus("تم حفظ التعليمات المخصصة للصوت بنجاح")
-                    Toast.makeText(this, "تم حفظ التعليمات المخصصة", Toast.LENGTH_SHORT).show()
+                    announceStatus(getString(R.string.announce_custom_instructions_saved))
+                    Toast.makeText(this, getString(R.string.toast_custom_instructions_saved), Toast.LENGTH_SHORT).show()
                 } else {
                     settingsPrefs.edit().remove(KEY_CUSTOM_VOICE_INSTRUCTIONS).apply()
-                    announceStatus("تم مسح التعليمات المخصصة للصوت")
+                    announceStatus(getString(R.string.announce_custom_instructions_cleared))
                 }
                 updateStudioUI()
             }
-            .setNeutralButton("مسح") { _, _ ->
+            .setNeutralButton(R.string.custom_instructions_clear) { _, _ ->
                 settingsPrefs.edit().remove(KEY_CUSTOM_VOICE_INSTRUCTIONS).apply()
                 updateStudioUI()
-                announceStatus("تم مسح التعليمات المخصصة للصوت")
-                Toast.makeText(this, "تم مسح التعليمات المخصصة", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.announce_custom_instructions_cleared))
+                Toast.makeText(this, getString(R.string.toast_custom_instructions_cleared), Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -824,44 +854,42 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         val updated = !current
         settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, updated).apply()
         updateStudioUI()
-        announceStatus(if (updated) "تم تفعيل الحوار متعدد الرواة. يمكنك الضغط على دليل صيغة الحوار لمعرفة النماذج." else "تم تعطيل الحوار متعدد الرواة")
+        announceStatus(if (updated) getString(R.string.announce_multi_speaker_on) else getString(R.string.announce_multi_speaker_off))
     }
 
     private fun showMultiSpeakerHelpDialog() {
-        val sampleDialogue = """Speaker1: مرحباً يا أحمد، أهلاً بك في تجربة الحوار الصوتي بالذكاء الاصطناعي.
+        val isArabic = isCurrentLocaleArabic()
+        val sampleDialogue = if (isArabic) {
+            """Speaker1: مرحباً يا أحمد، أهلاً بك في تجربة الحوار الصوتي بالذكاء الاصطناعي.
 Speaker2: أهلاً بك يا صديقي! هل يتغير الصوت تلقائياً الآن بحسب المتحدث؟
 Speaker1: نعم تماماً، هذا نموذج الحوار الرسمي لنموذج Gemini 3.8 Flash TTS.
 Speaker2: رائع جداً، الصوتان يبدوان طبيعيين ومنسجمين تماماً!"""
+        } else {
+            """Speaker1: Hello Ahmed! Welcome to the AI multi-speaker voice test.
+Speaker2: Glad to be here! Does the voice switch dynamically based on speaker?
+Speaker1: Yes, exactly! This is the official Gemini 3.8 Flash TTS dialogue standard.
+Speaker2: Outstanding! Both voices sound remarkably authentic and smooth!"""
+        }
 
         AlertDialog.Builder(this)
-            .setTitle("دليل صيغة الحوار (Google Gemini)")
-            .setMessage("""يدعم محرك Gemini 3.8 Flash TTS صيغتين رسميتين للحوار:
-
-1. صيغة السيناريو والبودكاست (صيغة Google المعتمدة):
-اكتب اسم المتحدث في أول كل سطر يليه نقطتان (:):
-Speaker1: مرحباً بك يا أحمد
-Speaker2: أهلاً بك يا صديقي
-
-2. صيغة الروايات والقصص:
-اجعل كلام الشخصيات بين علامتي تنصيص «...» أو "..." وباقي السرد للراوي:
-قال الراوي: «السلام عليكم» فاستمع الجميع.
-""")
-            .setPositiveButton("نسخ نموذج تجريبي") { _, _ ->
+            .setTitle(R.string.dialogue_help_title)
+            .setMessage(getString(R.string.dialogue_help_msg))
+            .setPositiveButton(R.string.dialogue_help_btn_copy) { _, _ ->
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("Dialogue Sample", sampleDialogue)
                 clipboard.setPrimaryClip(clip)
-                announceStatus("تم نسخ نموذج الحوار التجريبي إلى الحافظة بنجاح")
-                Toast.makeText(this, "تم نسخ النموذج إلى الحافظة بنجاح", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.announce_dialogue_template_copied))
+                Toast.makeText(this, getString(R.string.toast_dialogue_template_copied), Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("إغلاق", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     private fun testCurrentAudition() {
         val keys = getStoredApiKeys()
         if (keys.isEmpty()) {
-            announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
-            Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.announce_require_api_key_sync))
+            Toast.makeText(this, getString(R.string.toast_require_api_key), Toast.LENGTH_SHORT).show()
             bottomNav.selectedItemId = R.id.tab_settings
             return
         }
@@ -872,8 +900,9 @@ Speaker2: أهلاً بك يا صديقي
         val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
         val characterId = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
         val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        val isArabic = isCurrentLocaleArabic()
 
-        announceStatus("جارِ توليد عينة صوتية بالذكاء الاصطناعي...")
+        announceStatus(getString(R.string.audition_generating))
         lifecycleScope.launch {
             try {
                 val client = getActiveTtsClient(modelId)
@@ -884,22 +913,28 @@ Speaker2: أهلاً بك يا صديقي
                             narratorVoice = VoiceProfile.fromStoredString(narratorId),
                             characterVoice = VoiceProfile.fromStoredString(characterId)
                         )
-                        val text = """Speaker1: مرحباً يا أحمد، هذا فحص واختبار لصوت الراوي بنمط ${stylePreset.titleArabic}.
+                        val text = if (isArabic) {
+                            """Speaker1: مرحباً يا أحمد، هذا فحص واختبار لصوت الراوي بنمط ${stylePreset.title(true)}.
 Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصيات، للتأكد من سلاسة الحوار بين الصوتين."""
+                        } else {
+                            """Speaker1: Hello Ahmed! This is a test for the narrator voice in ${stylePreset.title(false)} style.
+Speaker2: Glad to be here! And this tests the character voice for smooth multi-speaker dialogue."""
+                        }
                         client.synthesize(text, voiceName = narratorId, stylePreset = stylePreset, multiSpeakerConfig = multiConfig)
                     } else {
-                        val text = "مرحباً يا أحمد، هذا فحص واختبار لصوت جيميني بالذكاء الاصطناعي بنمط ${stylePreset.titleArabic}."
+                        val text = getString(R.string.audition_sample_single_format, stylePreset.title(isArabic))
                         client.synthesize(text, voiceName = narratorId, stylePreset = stylePreset)
                     }
                 }
                 val previewFile = File(cacheDir, "audition_test.wav")
                 client.saveAudioAtomically(previewFile, audioData)
                 playAudioFileDirectly(previewFile)
-                announceStatus("تم تشغيل المعاينة الصوتية بنجاح")
+                announceStatus(getString(R.string.audition_success))
             } catch (e: Exception) {
                 Log.e(TAG, "Audition test failed: ${e.message}")
-                announceStatus("فشل توليد الصوت: ${e.localizedMessage ?: e.message}")
-                Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                val err = getString(R.string.audition_failed, e.localizedMessage ?: e.message)
+                announceStatus(err)
+                Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -907,8 +942,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     private fun showVoiceDesignDialog() {
         val keys = getStoredApiKeys()
         if (keys.isEmpty()) {
-            announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
-            Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.announce_require_api_key_sync))
+            Toast.makeText(this, getString(R.string.toast_require_api_key), Toast.LENGTH_SHORT).show()
             bottomNav.selectedItemId = R.id.tab_settings
             return
         }
@@ -922,22 +957,22 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
         val inputName = EditText(context).apply {
             hint = getString(R.string.dialog_voice_design_name_hint)
-            contentDescription = "اسم الصوت الجديد"
+            contentDescription = getString(R.string.dialog_voice_design_name_label)
         }
         val inputPrompt = EditText(context).apply {
             hint = getString(R.string.dialog_voice_design_prompt_hint)
-            contentDescription = "وصف النبرة بالإنجليزية"
+            contentDescription = getString(R.string.dialog_voice_design_prompt_label)
             minLines = 3
         }
 
         layout.addView(TextView(context).apply {
-            text = "اسم الصوت:"
+            text = getString(R.string.dialog_voice_design_name_label)
             textSize = 14f
             setTextColor(ContextCompat.getColor(context, R.color.text_high_contrast))
         })
         layout.addView(inputName)
         layout.addView(TextView(context).apply {
-            text = "وصف الصوت (باللغة الإنجليزية):"
+            text = getString(R.string.dialog_voice_design_prompt_label)
             textSize = 14f
             setTextColor(ContextCompat.getColor(context, R.color.text_high_contrast))
             setPadding(0, (12 * resources.displayMetrics.density).toInt(), 0, 0)
@@ -951,33 +986,35 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                 val name = inputName.text.toString().trim()
                 val prompt = inputPrompt.text.toString().trim()
                 if (name.isBlank() || prompt.isBlank()) {
-                    Toast.makeText(context, "يرجى إدخال اسم الصوت ووصفه", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, getString(R.string.toast_voice_design_blank), Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
 
-                announceStatus("جارِ تصميم الصوت الجديد بالذكاء الاصطناعي... يرجى الانتظار")
-                Toast.makeText(context, "جارِ تصميم الصوت وتوليد العينة... يرجى الانتظار", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.announce_voice_design_wait))
+                Toast.makeText(context, getString(R.string.toast_voice_design_wait), Toast.LENGTH_SHORT).show()
                 val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
                 lifecycleScope.launch {
                     try {
                         val client = getActiveTtsClient(modelId)
                         val (voiceId, sampleBytes) = client.createCustomVoice(name, prompt)
                         if (voiceId.isBlank()) {
-                            throw IllegalStateException("لم يُرجع الخادم معرف الصوت (Voice ID).")
+                            throw IllegalStateException(getString(R.string.error_voice_design_no_id))
                         }
                         val newProfile = VoiceProfile(
                             id = voiceId,
                             displayNameArabic = "$name ($voiceId)",
+                            displayNameEnglish = "$name ($voiceId)",
                             isCustomVoiceDesign = true,
-                            descriptionArabic = prompt
+                            descriptionArabic = prompt,
+                            descriptionEnglish = prompt
                         )
                         customVoices.removeAll { it.id.equals(voiceId, ignoreCase = true) }
                         customVoices.add(0, newProfile)
                         saveCustomVoicesToPrefs(customVoices)
                         settingsPrefs.edit().putString(KEY_GEMINI_VOICE, voiceId).apply()
                         updateStudioUI()
-                        announceStatus("تم إنشاء الصوت بنجاح وحفظه وتفعيله بمعرف: $voiceId")
-                        Toast.makeText(context, "تم حفظ وتفعيل الصوت المخصص في القائمة!", Toast.LENGTH_SHORT).show()
+                        announceStatus(getString(R.string.design_success, voiceId))
+                        Toast.makeText(context, getString(R.string.design_success, voiceId), Toast.LENGTH_SHORT).show()
 
                         sampleBytes?.let { bytes ->
                             val sampleFile = File(cacheDir, "sample_designed_$voiceId.wav")
@@ -986,8 +1023,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Voice design creation failed: ${e.message}")
-                        announceStatus("تعذر تصميم الصوت: ${e.localizedMessage ?: e.message}")
-                        Toast.makeText(context, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                        val err = getString(R.string.design_failed, e.localizedMessage ?: e.message)
+                        announceStatus(err)
+                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -998,8 +1036,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     private fun showVoiceReplicationDialog() {
         val keys = getStoredApiKeys()
         if (keys.isEmpty()) {
-            announceStatus("يرجى إدخال مفتاح Gemini API في تبويب الإعدادات أولاً")
-            Toast.makeText(this, "يرجى إدخال مفتاح API أولاً", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.announce_require_api_key_sync))
+            Toast.makeText(this, getString(R.string.toast_require_api_key), Toast.LENGTH_SHORT).show()
             bottomNav.selectedItemId = R.id.tab_settings
             return
         }
@@ -1043,8 +1081,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("Google Consent Statement", consentPhraseText)
             clipboard.setPrimaryClip(clip)
-            announceStatus("تم نسخ عبارة إقرار الموافقة إلى الحافظة")
-            Toast.makeText(this, "تم نسخ عبارة الموافقة بنجاح", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.repl_toast_consent_copied))
+            Toast.makeText(this, getString(R.string.repl_toast_consent_copied), Toast.LENGTH_SHORT).show()
         }
 
         // 1. Reference Audio Recording
@@ -1052,19 +1090,19 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             if (isRecordingConsent) {
                 recorderHelper.stopRecording()
                 isRecordingConsent = false
-                btnRecordConsentAudio.text = "تسجيل الموافقة"
+                btnRecordConsentAudio.text = getString(R.string.repl_btn_record_consent)
             }
             refAudioFile.delete()
             val started = recorderHelper.startRecording(refAudioFile) { elapsed ->
-                btnRecordRefAudio.text = "إيقاف ($elapsed ث)"
+                btnRecordRefAudio.text = getString(R.string.repl_btn_record_sample_stop, elapsed)
             }
             if (started) {
                 isRecordingRef = true
-                textRefAudioStatus.text = "جارِ التسجيل... تحدث بنبرتك الطبيعية لمدة 10-30 ثانية"
+                textRefAudioStatus.text = getString(R.string.repl_status_recording_sample)
                 textRefAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
-                announceStatus("بدأ تسجيل عينة الصوت. تحدث الآن بنبرتك الطبيعية لمدة 10 إلى 30 ثانية.")
+                announceStatus(getString(R.string.repl_status_recording_sample))
             } else {
-                Toast.makeText(this, "تعذر بدء التسجيل، تأكد من إذن الميكروفون", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_cannot_start_recording), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -1075,23 +1113,23 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                 } else {
                     onRecordAudioPermissionResult = { granted ->
                         if (granted) startRecordingRef()
-                        else Toast.makeText(this, "إذن الميكروفون مطلوب لتسجيل الصوت", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(this, getString(R.string.toast_mic_perm_required), Toast.LENGTH_SHORT).show()
                     }
                     requestRecordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
             } else {
                 val wav = recorderHelper.stopRecording()
                 isRecordingRef = false
-                btnRecordRefAudio.text = "إعادة التسجيل"
+                btnRecordRefAudio.text = getString(R.string.repl_btn_record_sample_again)
                 if (wav != null && wav.exists() && wav.length() > 0) {
                     refAudioBytes = wav.readBytes()
                     val kb = refAudioBytes!!.size / 1024
-                    textRefAudioStatus.text = "تم تسجيل العينة بنجاح ($kb ك.ب)"
+                    textRefAudioStatus.text = getString(R.string.repl_status_sample_recorded, kb)
                     textRefAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
                     btnPlayRefAudio.visibility = View.VISIBLE
-                    announceStatus("تم إيقاف التسجيل وحفظ العينة بنجاح، الحجم $kb كيلوبايت")
+                    announceStatus(getString(R.string.repl_status_sample_recorded, kb))
                 } else {
-                    textRefAudioStatus.text = "لم يتم التقاط صوت كافٍ، حاول مجدداً"
+                    textRefAudioStatus.text = getString(R.string.repl_status_low_audio)
                 }
             }
         }
@@ -1100,13 +1138,13 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             onAudioPickedCallback = { bytes, fileName ->
                 refAudioBytes = bytes
                 val kb = bytes.size / 1024
-                textRefAudioStatus.text = "تم اختيار ملف: $fileName ($kb ك.ب)"
+                textRefAudioStatus.text = getString(R.string.repl_status_sample_file_chosen, fileName, kb)
                 textRefAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
                 try {
                     refAudioFile.writeBytes(bytes)
                     btnPlayRefAudio.visibility = View.VISIBLE
                 } catch (_: Exception) {}
-                announceStatus("تم اختيار ملف عينة الصوت بنجاح: $fileName")
+                announceStatus(getString(R.string.repl_sample_selected, fileName))
             }
             audioPickerLauncher.launch(arrayOf("audio/*", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4"))
         }
@@ -1114,12 +1152,12 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnPlayRefAudio.setOnClickListener {
             if (recorderHelper.isPlaying()) {
                 recorderHelper.stopPlayback()
-                btnPlayRefAudio.text = "معاينة عينة الصوت"
+                btnPlayRefAudio.text = getString(R.string.repl_btn_preview_sample_play)
             } else {
                 if (refAudioFile.exists()) {
-                    btnPlayRefAudio.text = "إيقاف المعاينة"
+                    btnPlayRefAudio.text = getString(R.string.repl_btn_preview_sample_stop)
                     recorderHelper.playAudio(refAudioFile) {
-                        btnPlayRefAudio.text = "معاينة عينة الصوت"
+                        btnPlayRefAudio.text = getString(R.string.repl_btn_preview_sample_play)
                     }
                 }
             }
@@ -1130,19 +1168,19 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             if (isRecordingRef) {
                 recorderHelper.stopRecording()
                 isRecordingRef = false
-                btnRecordRefAudio.text = "تسجيل العينة"
+                btnRecordRefAudio.text = getString(R.string.repl_btn_record_sample)
             }
             consentAudioFile.delete()
             val started = recorderHelper.startRecording(consentAudioFile) { elapsed ->
-                btnRecordConsentAudio.text = "إيقاف ($elapsed ث)"
+                btnRecordConsentAudio.text = getString(R.string.repl_btn_record_sample_stop, elapsed)
             }
             if (started) {
                 isRecordingConsent = true
-                textConsentAudioStatus.text = "جارِ التسجيل... اقرأ نص الموافقة الإنجليزي بصوتك"
+                textConsentAudioStatus.text = getString(R.string.repl_status_recording_consent)
                 textConsentAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
-                announceStatus("بدأ تسجيل إقرار الموافقة. اقرأ الآن العبارة الإنجليزية بصوتك.")
+                announceStatus(getString(R.string.repl_status_recording_consent))
             } else {
-                Toast.makeText(this, "تعذر بدء التسجيل", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_cannot_start_recording), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -1153,23 +1191,23 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                 } else {
                     onRecordAudioPermissionResult = { granted ->
                         if (granted) startRecordingConsent()
-                        else Toast.makeText(this, "إذن الميكروفون مطلوب لتسجيل الصوت", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(this, getString(R.string.toast_mic_perm_required), Toast.LENGTH_SHORT).show()
                     }
                     requestRecordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
             } else {
                 val wav = recorderHelper.stopRecording()
                 isRecordingConsent = false
-                btnRecordConsentAudio.text = "إعادة التسجيل"
+                btnRecordConsentAudio.text = getString(R.string.repl_btn_record_sample_again)
                 if (wav != null && wav.exists() && wav.length() > 0) {
                     consentAudioBytes = wav.readBytes()
                     val kb = consentAudioBytes!!.size / 1024
-                    textConsentAudioStatus.text = "تم تسجيل الموافقة بنجاح ($kb ك.ب)"
+                    textConsentAudioStatus.text = getString(R.string.repl_status_consent_recorded, kb)
                     textConsentAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
                     btnPlayConsentAudio.visibility = View.VISIBLE
-                    announceStatus("تم إيقاف التسجيل وحفظ إقرار الموافقة بنجاح")
+                    announceStatus(getString(R.string.repl_status_consent_recorded, kb))
                 } else {
-                    textConsentAudioStatus.text = "لم يتم التقاط تسجيل الموافقة، حاول مجدداً"
+                    textConsentAudioStatus.text = getString(R.string.repl_status_low_consent)
                 }
             }
         }
@@ -1178,13 +1216,13 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             onAudioPickedCallback = { bytes, fileName ->
                 consentAudioBytes = bytes
                 val kb = bytes.size / 1024
-                textConsentAudioStatus.text = "تم اختيار ملف: $fileName ($kb ك.ب)"
+                textConsentAudioStatus.text = getString(R.string.repl_status_consent_file_chosen, fileName, kb)
                 textConsentAudioStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
                 try {
                     consentAudioFile.writeBytes(bytes)
                     btnPlayConsentAudio.visibility = View.VISIBLE
                 } catch (_: Exception) {}
-                announceStatus("تم اختيار ملف إقرار الموافقة بنجاح: $fileName")
+                announceStatus(getString(R.string.repl_consent_selected, fileName))
             }
             audioPickerLauncher.launch(arrayOf("audio/*", "audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4"))
         }
@@ -1192,12 +1230,12 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnPlayConsentAudio.setOnClickListener {
             if (recorderHelper.isPlaying()) {
                 recorderHelper.stopPlayback()
-                btnPlayConsentAudio.text = "معاينة تسجيل الموافقة"
+                btnPlayConsentAudio.text = getString(R.string.repl_btn_preview_consent_play)
             } else {
                 if (consentAudioFile.exists()) {
-                    btnPlayConsentAudio.text = "إيقاف المعاينة"
+                    btnPlayConsentAudio.text = getString(R.string.repl_btn_preview_consent_stop)
                     recorderHelper.playAudio(consentAudioFile) {
-                        btnPlayConsentAudio.text = "معاينة تسجيل الموافقة"
+                        btnPlayConsentAudio.text = getString(R.string.repl_btn_preview_consent_play)
                     }
                 }
             }
@@ -1207,28 +1245,28 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         btnSubmitReplication.setOnClickListener {
             val voiceName = editVoiceName.text.toString().trim()
             if (voiceName.isBlank()) {
-                announceStatus("يرجى إدخال اسم الصوت المستنسخ أولاً")
-                Toast.makeText(this, "يرجى إدخال اسم الصوت", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.repl_error_missing_sample))
+                Toast.makeText(this, getString(R.string.toast_voice_design_blank), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             val refBytes = refAudioBytes
             if (refBytes == null || refBytes.isEmpty()) {
-                announceStatus("عينة الصوت الأساسية مطلوبة، يرجى تسجيلها أو اختيار ملف")
-                Toast.makeText(this, "يرجى تجهيز عينة الصوت الأساسية", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.repl_error_missing_sample))
+                Toast.makeText(this, getString(R.string.repl_error_missing_sample), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             val consentBytes = consentAudioBytes
             if (consentBytes == null || consentBytes.isEmpty()) {
-                announceStatus("تسجيل إقرار الموافقة إلزامي، يرجى تسجيل قراءة العبارة")
-                Toast.makeText(this, "يرجى تجهيز تسجيل إقرار الموافقة", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.repl_error_missing_consent))
+                Toast.makeText(this, getString(R.string.repl_error_missing_consent), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             recorderHelper.release()
             btnSubmitReplication.isEnabled = false
-            btnSubmitReplication.text = "جارِ الاستنساخ والمطابقة..."
-            announceStatus("جارِ إرسال العينات ومطابقة البصمة واستنساخ الصوت عبر Gemini 3.8 Flash TTS... يرجى الانتظار")
-            Toast.makeText(this, "جارِ استنساخ الصوت عبر الذكاء الاصطناعي... يرجى الانتظار", Toast.LENGTH_SHORT).show()
+            btnSubmitReplication.text = getString(R.string.repl_btn_submit_running)
+            announceStatus(getString(R.string.repl_starting))
+            Toast.makeText(this, getString(R.string.repl_starting), Toast.LENGTH_SHORT).show()
 
             val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
             lifecycleScope.launch {
@@ -1238,16 +1276,18 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                     val newProfile = VoiceProfile(
                         id = voiceId,
                         displayNameArabic = "$voiceName ($voiceId)",
+                        displayNameEnglish = "$voiceName ($voiceId)",
                         isCustomVoiceDesign = true,
-                        descriptionArabic = "صوت مستنسخ بالذكاء الاصطناعي (Replicated Voice)"
+                        descriptionArabic = "صوت مستنسخ بالذكاء الاصطناعي (Replicated Voice)",
+                        descriptionEnglish = "Replicated AI Voice"
                     )
                     customVoices.removeAll { it.id.equals(voiceId, ignoreCase = true) }
                     customVoices.add(0, newProfile)
                     saveCustomVoicesToPrefs(customVoices)
                     settingsPrefs.edit().putString(KEY_GEMINI_VOICE, voiceId).apply()
                     updateStudioUI()
-                    announceStatus("تم استنساخ الصوت بنجاح وحفظه وتفعيله كصوت للراوي!")
-                    Toast.makeText(this@MainActivity, "تم استنساخ الصوت وحفظه في قائمتك بنجاح!", Toast.LENGTH_LONG).show()
+                    announceStatus(getString(R.string.repl_success, voiceId))
+                    Toast.makeText(this@MainActivity, getString(R.string.repl_success, voiceId), Toast.LENGTH_LONG).show()
                     dialog.dismiss()
 
                     sampleBytes?.let { bytes ->
@@ -1257,10 +1297,11 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                     }
                 } catch (e: Exception) {
                     btnSubmitReplication.isEnabled = true
-                    btnSubmitReplication.text = "بدء الاستنساخ وحفظ الصوت"
+                    btnSubmitReplication.text = getString(R.string.repl_btn_start)
                     Log.e(TAG, "Voice replication failed: ${e.message}")
-                    announceStatus("تعذر استنساخ الصوت: ${e.localizedMessage ?: e.message}")
-                    Toast.makeText(this@MainActivity, "خطأ: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                    val err = getString(R.string.repl_failed, e.localizedMessage ?: e.message)
+                    announceStatus(err)
+                    Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1282,37 +1323,37 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             val count = keys.size
             val firstMasked = KeyQuotaManager.maskKey(keys[0])
             val statusText = if (count > 1) {
-                "المفاتيح: $firstMasked (+${count - 1} أخرى)"
+                getString(R.string.settings_keys_status_multi, firstMasked, count - 1)
             } else {
-                "المفتاح: $firstMasked"
+                getString(R.string.settings_keys_status_single, firstMasked)
             }
             textApiKeyStatus.text = statusText
-            textApiKeyStatus.contentDescription = "قائمة المفاتيح: مسجل $count مفاتيح API، المفتاح الأول $firstMasked"
+            textApiKeyStatus.contentDescription = getString(R.string.settings_keys_desc_format, count, firstMasked)
             textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
         } else {
-            textApiKeyStatus.text = "المفاتيح غير مسجلة"
-            textApiKeyStatus.contentDescription = "مفاتيح API غير مسجلة، اضغط على تعديل لإضافة مفاتيحك"
+            textApiKeyStatus.text = getString(R.string.status_keys_not_registered)
+            textApiKeyStatus.contentDescription = getString(R.string.desc_keys_not_registered)
             textApiKeyStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
 
         val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
-        btnSelectModel.text = "النموذج: $modelId"
+        btnSelectModel.text = getString(R.string.model_selected_format, modelId)
         updateLanguageButtonLabel()
 
         val currentVer = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.4.4"
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.5.3"
         } catch (e: Exception) {
-            "1.4.4"
+            "1.5.3"
         }
-        textAppVersion.text = "الإصدار: $currentVer"
+        textAppVersion.text = getString(R.string.app_version_label, currentVer)
 
         val hasStorage = hasStoragePermission()
         if (hasStorage) {
-            btnStoragePermission.text = "الوصول للملفات: مفعّل (الذاكرة الداخلية)"
-            btnStoragePermission.contentDescription = "إذن الوصول لجميع الملفات مفعّل، يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية"
+            btnStoragePermission.text = getString(R.string.storage_perm_enabled)
+            btnStoragePermission.contentDescription = getString(R.string.desc_storage_perm_enabled)
         } else {
-            btnStoragePermission.text = "الوصول للملفات: غير مفعّل (اضغط للتفعيل)"
-            btnStoragePermission.contentDescription = "إذن الوصول لجميع الملفات غير مفعّل، اضغط للانتقال للإعدادات والتفعيل للحفظ في الذاكرة الداخلية"
+            btnStoragePermission.text = getString(R.string.storage_perm_disabled)
+            btnStoragePermission.contentDescription = getString(R.string.desc_storage_perm_disabled)
         }
     }
 
@@ -1331,8 +1372,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
     private fun requestOrCheckStoragePermission() {
         if (hasStoragePermission()) {
-            announceStatus("إذن الوصول لجميع الملفات مفعّل بالفعل. يتم حفظ الكتب في مجلد GeminiAudiobook بالذاكرة الداخلية.")
-            Toast.makeText(this, "الإذن مفعّل بالفعل", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.storage_perm_already_granted))
+            Toast.makeText(this, getString(R.string.toast_storage_perm_already_granted), Toast.LENGTH_SHORT).show()
         } else {
             showStoragePermissionDialog()
         }
@@ -1340,9 +1381,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
     private fun showStoragePermissionDialog(onDismiss: () -> Unit = {}) {
         AlertDialog.Builder(this)
-            .setTitle("إذن الوصول الكامل للملفات")
-            .setMessage("ليتمكن التطبيق من حفظ فصول وكتب الصوت مباشرة داخل مجلد «GeminiAudiobook» بالذاكرة الداخلية لجهازك، يرجى تفعيل خيار «الوصول إلى جميع الملفات» في شاشة الإعدادات التالية.")
-            .setPositiveButton("الانتقال للإعدادات والتفعيل") { _, _ ->
+            .setTitle(R.string.storage_perm_dialog_title)
+            .setMessage(R.string.storage_perm_dialog_msg)
+            .setPositiveButton(R.string.storage_perm_btn_settings) { _, _ ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     try {
                         val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
@@ -1357,7 +1398,7 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                     requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 101)
                 }
             }
-            .setNegativeButton("لاحقاً") { _, _ ->
+            .setNegativeButton(R.string.storage_perm_btn_later) { _, _ ->
                 onDismiss()
             }
             .show()
@@ -1372,9 +1413,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         }
 
         val input = EditText(this).apply {
-            hint = "أدخل مفتاح أو أكثر من مفاتيح Gemini API (كل مفتاح في سطر مستقل)"
+            hint = getString(R.string.dialog_api_keys_hint)
             setText(currentKeys)
-            contentDescription = "حقل إدخال مفاتيح Gemini API، ضع كل مفتاح في سطر مستقل"
+            contentDescription = getString(R.string.dialog_api_keys_desc)
             minLines = 4
             maxLines = 10
             gravity = android.view.Gravity.TOP
@@ -1384,8 +1425,8 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         container.addView(input)
 
         val btnPaste = Button(this).apply {
-            text = "لصق من الحافظة"
-            contentDescription = "زر لصق مفتاح جديد من الحافظة وإضافته للقائمة"
+            text = getString(R.string.btn_paste_from_clipboard)
+            contentDescription = getString(R.string.desc_paste_from_clipboard)
             setOnClickListener {
                 val clipManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                 val clipText = clipManager?.primaryClip?.getItemAt(0)?.text?.toString()?.trim()
@@ -1394,28 +1435,28 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                     if (!existing.contains(clipText)) {
                         existing.add(clipText)
                         input.setText(existing.joinToString("\n"))
-                        announceStatus("تمت إضافة المفتاح من الحافظة للقائمة بنجاح")
-                        Toast.makeText(this@MainActivity, "تمت إضافة المفتاح", Toast.LENGTH_SHORT).show()
+                        announceStatus(getString(R.string.announce_key_pasted_success))
+                        Toast.makeText(this@MainActivity, getString(R.string.toast_key_saved), Toast.LENGTH_SHORT).show()
                     } else {
-                        announceStatus("المفتاح موجود بالفعل في القائمة")
+                        announceStatus(getString(R.string.announce_key_already_in_list))
                     }
                 } else {
-                    announceStatus("الحافظة لا تحتوي على مفتاح API صالح يبدأ بـ AIzaSy")
-                    Toast.makeText(this@MainActivity, "الحافظة فارغة أو لا تحوي مفتاح صالح", Toast.LENGTH_SHORT).show()
+                    announceStatus(getString(R.string.announce_clipboard_no_valid_key))
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_clipboard_no_valid_key), Toast.LENGTH_SHORT).show()
                 }
             }
         }
         container.addView(btnPaste)
 
         AlertDialog.Builder(this)
-            .setTitle("إدارة مفاتيح Gemini API المتعددة")
+            .setTitle(R.string.dialog_api_keys_title)
             .setView(container)
             .setPositiveButton(R.string.action_save) { _, _ ->
                 val lines = input.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }
                 saveApiKeys(lines)
                 updateSettingsUI()
-                announceStatus("تم حفظ ${lines.size} مفتاح API بنجاح")
-                Toast.makeText(this, "تم حفظ ${lines.size} مفتاح", Toast.LENGTH_SHORT).show()
+                announceStatus(getString(R.string.announce_keys_saved_count, lines.size))
+                Toast.makeText(this, getString(R.string.toast_keys_saved_count, lines.size), Toast.LENGTH_SHORT).show()
                 fetchAndLoadCustomVoices(userTriggered = false)
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -1425,35 +1466,35 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     private fun testApiKeyConnection() {
         val keys = getStoredApiKeys()
         if (keys.isEmpty()) {
-            announceStatus("يرجى إدخال مفتاح Gemini API أولاً لفحصه")
-            Toast.makeText(this, "المفتاح غير مسجل بعد", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.announce_require_api_key_sync))
+            Toast.makeText(this, getString(R.string.toast_require_api_key), Toast.LENGTH_SHORT).show()
             return
         }
 
-        announceStatus("جارٍ فحص ${keys.size} مفتاح API مع خوادم Google...")
+        announceStatus(getString(R.string.announce_test_keys_running, keys.size))
         lifecycleScope.launch {
             try {
                 val client = GeminiTtsClient(
                     apiKeys = keys,
                     quotaManager = keyQuotaManager
                 )
-                val audio = client.synthesize("اختبار اتصال مفاتيح API", voiceName = "Charon")
+                val audio = client.synthesize(getString(R.string.test_keys_audio_text), voiceName = "Charon")
                 if (audio.size > 1000) {
-                    val msg = "تم فحص المفاتيح بنجاح! الاتصال يعمل (${keys.size} مفاتيح جاهزة)."
+                    val msg = getString(R.string.test_keys_success_msg, keys.size)
                     announceStatus(msg)
                     AlertDialog.Builder(this@MainActivity)
-                        .setTitle("نجاح الاتصال")
+                        .setTitle(R.string.status_connection_success)
                         .setMessage(msg)
-                        .setPositiveButton("حسناً", null)
+                        .setPositiveButton(android.R.string.ok, null)
                         .show()
                 }
             } catch (e: Exception) {
-                val err = "فحص الاتصال: ${e.message}"
+                val err = getString(R.string.status_connection_failed, e.message ?: "")
                 announceStatus(err)
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("حالة الاتصال")
+                    .setTitle(R.string.test_keys_dialog_title)
                     .setMessage(err)
-                    .setPositiveButton("حسناً", null)
+                    .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
         }
@@ -1466,12 +1507,12 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         if (selectedIdx < 0) selectedIdx = 0
 
         AlertDialog.Builder(this)
-            .setTitle("اختر نموذج الذكاء الاصطناعي")
+            .setTitle(R.string.model_picker_title)
             .setSingleChoiceItems(models, selectedIdx) { dialog, which ->
                 val chosen = models[which]
                 settingsPrefs.edit().putString(KEY_MODEL_ID, chosen).apply()
                 updateSettingsUI()
-                announceStatus("تم اعتماد النموذج: $chosen")
+                announceStatus(getString(R.string.model_selected_format, chosen))
                 dialog.dismiss()
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -1548,18 +1589,18 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
         val options = if (isInProgress) {
             arrayOf(
-                "تشغيل الفصول المتاحة",
-                "استئناف تحويل باقي الفصول",
-                "تصدير الفصول المنجزة إلى مجلد GeminiAudiobook",
-                "مشاركة الملفات الصوتية (Share)",
-                "حذف الكتاب"
+                getString(R.string.action_play_completed_chapters),
+                getString(R.string.action_resume_remaining_chapters),
+                getString(R.string.action_export_book),
+                getString(R.string.action_share_book),
+                getString(R.string.action_delete_book)
             )
         } else {
             arrayOf(
-                "تشغيل الكتاب",
-                "تصدير الصوت إلى مجلد GeminiAudiobook",
-                "مشاركة الملفات الصوتية (Share)",
-                "حذف الكتاب"
+                getString(R.string.action_play_book),
+                getString(R.string.action_export_book),
+                getString(R.string.action_share_book),
+                getString(R.string.action_delete_book)
             )
         }
 
@@ -1588,17 +1629,17 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     }
 
     private fun exportBook(book: BookItem) {
-        announceStatus("جارِ تصدير فصول الكتاب إلى مجلد GeminiAudiobook بالذاكرة الداخلية...")
+        announceStatus(getString(R.string.status_exporting_chapters))
         lifecycleScope.launch(Dispatchers.IO) {
             val (count, path) = AudioExporter.exportBookToDedicatedFolder(this@MainActivity, book)
             withContext(Dispatchers.Main) {
                 if (count > 0) {
-                    val msg = "تم تصدير $count فصول بنجاح إلى: $path"
+                    val msg = getString(R.string.status_export_success, count, path)
                     announceStatus(msg)
                     Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                 } else {
-                    announceStatus("لم يتم العثور على فصول جاهزة لتصديرها")
-                    Toast.makeText(this@MainActivity, "لا توجد فصول جاهزة", Toast.LENGTH_SHORT).show()
+                    announceStatus(getString(R.string.status_export_no_chapters))
+                    Toast.makeText(this@MainActivity, getString(R.string.status_export_no_chapters), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -1607,18 +1648,18 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     private fun shareBook(book: BookItem) {
         val ok = AudioExporter.shareBookAudio(this, book)
         if (!ok) {
-            announceStatus("تعذر مشاركة الملفات الصوتية")
-            Toast.makeText(this, "تعذر مشاركة الملفات الصوتية", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.status_share_failed))
+            Toast.makeText(this, getString(R.string.status_share_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun resumeIncompleteBook(book: BookItem) {
         val persistentSource = File(book.bookDir, "source_book.txt")
         if (persistentSource.exists() && persistentSource.length() > 0) {
-            announceStatus("استئناف معالجة الفصول المتبقية لكتاب «${book.title}»...")
+            announceStatus(getString(R.string.status_resuming_book, book.title))
             startBookProcessing(persistentSource, book.bookDir, book.title)
         } else {
-            announceStatus("يرجى اختيار ملف النص الأصلي للكتاب لاستئناف معالجته.")
+            announceStatus(getString(R.string.status_select_original_file))
             try {
                 filePickerLauncher.launch(arrayOf(
                     "text/plain",
@@ -1629,7 +1670,7 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                     "*/*"
                 ))
             } catch (e: Exception) {
-                Toast.makeText(this, "تعذر فتح منتقي الملفات", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.toast_cannot_open_file_picker), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1637,11 +1678,11 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
     private fun confirmActualDeletion(book: BookItem) {
         AlertDialog.Builder(this)
             .setTitle(R.string.confirm_delete_title)
-            .setMessage("هل أنت متأكد من حذف '${book.title}' ومقاطعه الصوتية؟")
+            .setMessage(getString(R.string.confirm_delete_named_msg, book.title))
             .setPositiveButton(R.string.action_delete) { _, _ ->
                 book.bookDir.deleteRecursively()
                 refreshBooksList()
-                announceStatus("تم حذف الكتاب")
+                announceStatus(getString(R.string.status_book_deleted))
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
@@ -1705,30 +1746,31 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         val textDialogueDetectionStatus = dialogView.findViewById<TextView>(R.id.textDialogueDetectionStatus)
 
         val annotator = DialogueTurnAnnotator()
+        val isArabic = isCurrentLocaleArabic()
 
         val narratorId = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
         val narratorProfile = getVoiceProfile(narratorId)
         val styleId = settingsPrefs.getString(KEY_VOICE_STYLE, DEFAULT_STYLE_ID) ?: DEFAULT_STYLE_ID
         val stylePreset = VoiceStylePreset.fromId(styleId)
         val isMulti = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
-        val multiInfo = if (isMulti) " | الحوار متعدد" else ""
+        val multiInfo = if (isMulti) getString(R.string.paste_multi_suffix) else ""
 
-        textActiveVoiceSettings.text = "الراوي: ${narratorProfile.displayNameArabic} | النمط: ${stylePreset.titleArabic}$multiInfo"
+        textActiveVoiceSettings.text = getString(R.string.paste_active_voice_format, narratorProfile.displayName(isArabic), stylePreset.title(isArabic), multiInfo)
 
         val updateCount = {
             val len = editPasteContent.text?.length ?: 0
-            textPasteCharCount.text = "عدد الحروف: $len"
+            textPasteCharCount.text = getString(R.string.char_count_format, len)
         }
 
         val updateDialogueStatus = {
             val content = editPasteContent.text?.toString() ?: ""
             if (content.isBlank()) {
-                textDialogueDetectionStatus.text = "نوع النص: لم يتم إدخال نص بعد"
+                textDialogueDetectionStatus.text = getString(R.string.dialogue_type_empty)
                 textDialogueDetectionStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
             } else {
                 val summary = annotator.summarizeText(content)
-                textDialogueDetectionStatus.text = "التعرف الصوتي: $summary"
-                if (summary.contains("حوار ثنائي")) {
+                textDialogueDetectionStatus.text = getString(R.string.dialogue_type_detected, summary)
+                if (summary.contains("حوار ثنائي") || summary.contains("Dialogue", ignoreCase = true)) {
                     textDialogueDetectionStatus.setTextColor(ContextCompat.getColor(this, R.color.primary_accessible))
                 } else {
                     textDialogueDetectionStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
@@ -1756,57 +1798,63 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
                         editPasteContent.setSelection(itemText.length)
                         updateCount()
                         updateDialogueStatus()
-                        announceStatus("تم لصق ${itemText.length} حرفاً من الحافظة. ${annotator.summarizeText(itemText)}")
-                        Toast.makeText(this, "تم لصق النص بنجاح", Toast.LENGTH_SHORT).show()
+                        announceStatus(getString(R.string.paste_dialog_pasted_announcement, itemText.length, annotator.summarizeText(itemText)))
+                        Toast.makeText(this, getString(R.string.toast_text_pasted), Toast.LENGTH_SHORT).show()
                     } else {
-                        announceStatus("الحافظة لا تحتوي على نص")
-                        Toast.makeText(this, "الحافظة فارغة", Toast.LENGTH_SHORT).show()
+                        announceStatus(getString(R.string.toast_no_text_or_file))
+                        Toast.makeText(this, getString(R.string.toast_no_text_or_file), Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    announceStatus("الحافظة فارغة")
-                    Toast.makeText(this, "الحافظة فارغة", Toast.LENGTH_SHORT).show()
+                    announceStatus(getString(R.string.toast_no_text_or_file))
+                    Toast.makeText(this, getString(R.string.toast_no_text_or_file), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error accessing clipboard: ${e.message}")
-                Toast.makeText(this, "تعذر قراءة الحافظة", Toast.LENGTH_SHORT).show()
             }
         }
 
         btnInsertDialogueTemplate.setOnClickListener {
-            val sampleDialogue = """Speaker1: مرحباً يا أحمد في تجربة الحوار الصوتي متعدد المتحدثين.
+            val sampleDialogue = if (isArabic) {
+                """Speaker1: مرحباً يا أحمد في تجربة الحوار الصوتي متعدد المتحدثين.
 Speaker2: أهلاً بك يا صديقي! هل يتغير الصوت تلقائياً الآن بحسب المتحدث؟
 Speaker1: نعم تماماً، هذا نموذج الحوار الرسمي المعتمد من Google Gemini.
 Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة للغاية!"""
+            } else {
+                """Speaker1: Hello Ahmed! Welcome to the multi-speaker voice test.
+Speaker2: Glad to be here! Does the voice switch dynamically based on speaker?
+Speaker1: Yes, exactly! This is the official Google Gemini dialogue standard.
+Speaker2: Outstanding! The tone sounds remarkably natural and smooth!"""
+            }
             editPasteContent.setText(sampleDialogue)
             editPasteContent.setSelection(sampleDialogue.length)
             if (!settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)) {
                 settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, true).apply()
                 updateStudioUI()
-                announceStatus("تم تفعيل الحوار متعدد الرواة تلقائياً وإدراج نموذج الحوار الرسمي")
+                announceStatus(getString(R.string.announce_multi_speaker_on))
             } else {
-                announceStatus("تم إدراج نموذج الحوار الرسمي بنجاح")
+                announceStatus(getString(R.string.announce_dialogue_template_copied))
             }
             updateCount()
             updateDialogueStatus()
-            Toast.makeText(this, "تم إدراج نموذج الحوار بنجاح", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_dialogue_template_copied), Toast.LENGTH_SHORT).show()
         }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.action_paste_text)
             .setView(dialogView)
-            .setPositiveButton("تحويل وحفظ في المكتبة") { _, _ ->
+            .setPositiveButton(R.string.btn_convert_save_library) { _, _ ->
                 val content = editPasteContent.text.toString().trim()
                 if (content.isBlank()) {
-                    announceStatus("يرجى إدخال أو لصق نص للتحويل")
-                    Toast.makeText(this, "النص فارغ! يرجى إدخال نص أولاً", Toast.LENGTH_SHORT).show()
+                    announceStatus(getString(R.string.toast_no_text_or_file))
+                    Toast.makeText(this, getString(R.string.toast_no_text_or_file), Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
 
                 val summary = annotator.summarizeText(content)
-                if (summary.contains("حوار ثنائي") && !settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)) {
+                if ((summary.contains("حوار ثنائي") || summary.contains("Dialogue", ignoreCase = true)) && !settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)) {
                     settingsPrefs.edit().putBoolean(KEY_MULTI_SPEAKER, true).apply()
                     updateStudioUI()
-                    announceStatus("تم اكتشاف حوار وتفعيل المتحدثين تلقائياً")
+                    announceStatus(getString(R.string.announce_multi_speaker_on))
                 }
 
                 val customTitle = editPasteTitle.text.toString().trim()
@@ -1815,9 +1863,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 } else {
                     val snippet = content.take(30).replace(Regex("[\\r\\n]+"), " ").trim()
                     if (snippet.isNotBlank()) {
-                        "مقطع - $snippet"
+                        "Clip - $snippet"
                     } else {
-                        "مقطع_${System.currentTimeMillis()}"
+                        "Clip_${System.currentTimeMillis()}"
                     }
                 }
 
@@ -1827,12 +1875,13 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 val tempFile = File(cacheDir, "pasted_${System.currentTimeMillis()}.txt")
                 try {
                     tempFile.writeText(content, Charsets.UTF_8)
-                    announceStatus("بدء تحويل النص المنسوخ إلى كتاب صوتي في المكتبة...")
+                    announceStatus(getString(R.string.book_processing_started, finalTitle))
                     startBookProcessing(tempFile, bookDir, finalTitle)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error saving pasted text: ${e.message}", e)
-                    announceStatus("فشل حفظ النص: ${e.message}")
-                    Toast.makeText(this, "خطأ في المعالجة", Toast.LENGTH_SHORT).show()
+                    val err = getString(R.string.status_conversion_error, e.message ?: "")
+                    announceStatus(err)
+                    Toast.makeText(this, err, Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -1842,18 +1891,18 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
     private fun importAndProcessBook(uri: Uri) {
         lifecycleScope.launch {
             try {
-                announceStatus("جارِ استيراد الكتاب وقراءة الملف...")
+                announceStatus(getString(R.string.status_importing_book))
                 val rawName = getFileNameFromUri(uri)
                 val ext = rawName?.substringAfterLast('.', "")?.lowercase() ?: ""
                 if (ext.isNotEmpty() && ext != "txt" && ext != "md" && ext != "markdown" && ext != "docx") {
-                    announceStatus("عذراً، يجب اختيار ملف نصي (.txt) أو مارك داون (.md) أو مستند وورد (.docx)")
-                    Toast.makeText(this@MainActivity, "نوع الملف غير مدعوم. اختر ملف .txt أو .md أو .docx", Toast.LENGTH_LONG).show()
+                    announceStatus(getString(R.string.toast_unsupported_file_type))
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_unsupported_file_type), Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 val safeName = if (!rawName.isNullOrBlank()) {
                     rawName.replace(Regex("[^a-zA-Z0-9._\\-\\u0600-\\u06FF]"), "_")
                 } else {
-                    "كتاب_${System.currentTimeMillis()}.txt"
+                    "Book_${System.currentTimeMillis()}.txt"
                 }
                 val tempFile = File(cacheDir, safeName)
 
@@ -1862,22 +1911,23 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                         FileOutputStream(tempFile).use { output ->
                             input.copyTo(output)
                         }
-                    } ?: throw IllegalStateException("تعذر فتح ملف الإدخال")
+                    } ?: throw IllegalStateException("Cannot open input stream")
                 }
 
                 if (!tempFile.exists() || tempFile.length() == 0L) {
-                    announceStatus("الملف المختار فارغ!")
-                    Toast.makeText(this@MainActivity, "الملف المختار فارغ", Toast.LENGTH_LONG).show()
+                    announceStatus(getString(R.string.toast_file_empty))
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_file_empty), Toast.LENGTH_LONG).show()
                     return@launch
                 }
 
-                val bookTitle = tempFile.nameWithoutExtension.ifBlank { "كتاب صوتي" }
+                val bookTitle = tempFile.nameWithoutExtension.ifBlank { "Audiobook" }
                 val bookDir = File(File(filesDir, "audiobooks"), bookTitle)
                 startBookProcessing(tempFile, bookDir, bookTitle)
             } catch (e: Exception) {
                 Log.e(TAG, "Error importing book: ${e.message}", e)
-                announceStatus("فشل استيراد الملف: ${e.localizedMessage ?: e.message}")
-                Toast.makeText(this@MainActivity, "فشل الاستيراد: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                val err = getString(R.string.status_conversion_error, e.localizedMessage ?: e.message)
+                announceStatus(err)
+                Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1916,7 +1966,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
             .setTitle(R.string.dialog_quota_exceeded_title)
             .setMessage(R.string.dialog_quota_exceeded_msg)
             .setPositiveButton(R.string.action_retry_now) { _, _ ->
-                announceStatus("إعادة محاولة تحويل «$bookTitle»...")
+                announceStatus(getString(R.string.book_retry_started, bookTitle))
                 startBookProcessing(sourceFile, bookDir, bookTitle)
             }
             .setNeutralButton(R.string.action_edit_key) { _, _ ->
@@ -1938,10 +1988,11 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 val isMultiSpeaker = settingsPrefs.getBoolean(KEY_MULTI_SPEAKER, false)
                 val characterVoice = settingsPrefs.getString(KEY_CHARACTER_VOICE, DEFAULT_CHARACTER_VOICE) ?: DEFAULT_CHARACTER_VOICE
                 val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+                val isArabic = isCurrentLocaleArabic()
 
                 if (keys.isEmpty()) {
-                    announceStatus("يرجى إدخال مفتاح Gemini API في الإعدادات أولاً لتحويل الكتاب بالذكاء الاصطناعي")
-                    Toast.makeText(this@MainActivity, "يرجى إدخال مفاتيح Gemini API في الإعدادات", Toast.LENGTH_LONG).show()
+                    announceStatus(getString(R.string.toast_keys_required_conversion))
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_keys_required_conversion), Toast.LENGTH_LONG).show()
                     bottomNav.selectedItemId = R.id.tab_settings
                     return@launch
                 }
@@ -1978,12 +2029,12 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                     customInstructions = customInstructions
                 )
 
-                announceStatus("جارِ تحويل فصول «$bookTitle» عبر الذكاء الاصطناعي (نمط: ${stylePreset.titleArabic})...")
+                announceStatus(getString(R.string.status_converting_book_format, bookTitle, stylePreset.title(isArabic)))
 
                 withContext(Dispatchers.IO) {
                     engine.processBook(persistentSource, customTitle = bookTitle) { current, total, title ->
                         lifecycleScope.launch(Dispatchers.Main) {
-                            announceStatus("تحويل الفصل $current من $total: $title")
+                            announceStatus(getString(R.string.status_converting_chapter_format, current, total, title))
                         }
                     }
                 }
@@ -1993,19 +2044,20 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 } else {
                     "Music/GeminiAudiobook/$bookTitle"
                 }
-                announceStatus("اكتمل تجهيز الكتاب الصوتي بنجاح! تم الحفظ في مجلد: $folderDisplay")
-                Toast.makeText(this@MainActivity, "تم حفظ الكتاب في: $folderDisplay", Toast.LENGTH_LONG).show()
+                announceStatus(getString(R.string.status_conversion_success, folderDisplay))
+                Toast.makeText(this@MainActivity, getString(R.string.status_conversion_success, folderDisplay), Toast.LENGTH_LONG).show()
                 refreshBooksList()
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing book: ${e.message}", e)
                 refreshBooksList()
                 val isQuota = e is QuotaExceededException || e.message?.contains("429") == true || e.message?.contains("Rate limit") == true
                 if (isQuota) {
-                    announceStatus("تم الوصول لحد الطلبات (429). الفصول المنجزة محفوظة. يمكنك إعادة المحاولة الآن من النافذة الظاهرة.")
+                    announceStatus(getString(R.string.dialog_quota_exceeded_msg))
                     showQuotaExceededDialog(sourceFile, bookDir, bookTitle)
                 } else {
-                    announceStatus("حدث توقف أثناء المعالجة: ${e.localizedMessage ?: e.message}. تم حفظ الفصول المنجزة.")
-                    Toast.makeText(this@MainActivity, "تم حفظ الفصول المنجزة: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                    val err = getString(R.string.status_conversion_error, e.localizedMessage ?: e.message)
+                    announceStatus(err)
+                    Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
                 }
             } finally {
                 releaseWakeLock()
@@ -2038,7 +2090,8 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         val chapterObj = chapters.getJSONObject(chapterIndex - 1)
         val audioPath = chapterObj.optString("audio_path", "")
         val audioFile = chapterObj.optString("audio_file", "")
-        val chapterTitle = chapterObj.optString("title", "فصل $chapterIndex")
+        val defaultChapterTitle = getString(R.string.player_progress_format, chapterIndex, chapters.length())
+        val chapterTitle = chapterObj.optString("title", defaultChapterTitle)
 
         val candidate1 = File(audioPath)
         val candidate2 = File(book.bookDir, audioFile)
@@ -2052,8 +2105,8 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         }
 
         if (resolvedFile == null) {
-            announceStatus("الملف الصوتي لهذا الفصل غير متوفر")
-            Toast.makeText(this, "الملف الصوتي غير موجود", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.status_audio_not_available))
+            Toast.makeText(this, getString(R.string.toast_audio_missing), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -2061,9 +2114,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         textNowPlayingChapter.text = chapterTitle
         textPlayerBookTitle.text = book.title
         textPlayerChapterTitle.text = chapterTitle
-        textPlayerProgress.text = "فصل $chapterIndex من أصل ${chapters.length()}"
+        textPlayerProgress.text = getString(R.string.player_progress_format, chapterIndex, chapters.length())
 
-        announceStatus("تشغيل: ${book.title} - $chapterTitle")
+        announceStatus(getString(R.string.announce_playing_format, book.title, chapterTitle))
         updatePlayPauseButton(true)
 
         val intent = Intent(this, AudiobookPlayerService::class.java).apply {
@@ -2094,14 +2147,14 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         if (mc.isPlaying) {
             mc.pause()
             updatePlayPauseButton(false)
-            announceStatus("تم الإيقاف المؤقت")
+            announceStatus(getString(R.string.announce_playback_paused))
         } else {
             if (mc.mediaItemCount == 0 && currentActiveBook != null) {
                 playBook(currentActiveBook!!, currentChapterIndex)
             } else {
                 mc.play()
                 updatePlayPauseButton(true)
-                announceStatus("جارِ التشغيل")
+                announceStatus(getString(R.string.announce_playback_resumed))
             }
         }
     }
@@ -2112,7 +2165,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         if (currentChapterIndex < total) {
             playBook(book, currentChapterIndex + 1)
         } else {
-            announceStatus("وصلت إلى نهاية الكتاب")
+            announceStatus(getString(R.string.announce_end_of_book))
         }
     }
 
@@ -2121,7 +2174,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         if (currentChapterIndex > 1) {
             playBook(book, currentChapterIndex - 1)
         } else {
-            announceStatus("أنت بالفعل في الفصل الأول")
+            announceStatus(getString(R.string.announce_already_first_chapter))
         }
     }
 
@@ -2137,7 +2190,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         currentSpeed = speeds[nextIdx]
         mediaController?.setPlaybackSpeed(currentSpeed)
         btnSpeed.text = "${currentSpeed}x"
-        announceStatus("سرعة القراءة: ${currentSpeed} ضعف")
+        announceStatus(getString(R.string.announce_reading_speed_format, currentSpeed))
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean) {
@@ -2162,16 +2215,16 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
 
     private fun checkForAppUpdates(userTriggered: Boolean) {
         if (userTriggered) {
-            announceStatus("جارِ فحص التحديثات من الخادم...")
-            Toast.makeText(this, "جارِ فحص وجود تحديثات...", Toast.LENGTH_SHORT).show()
+            announceStatus(getString(R.string.updates_checking))
+            Toast.makeText(this, getString(R.string.updates_checking), Toast.LENGTH_SHORT).show()
         }
 
         lifecycleScope.launch {
             try {
                 val currentVersionName = try {
-                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.3.0"
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: "1.5.3"
                 } catch (e: Exception) {
-                    "1.3.0"
+                    "1.5.3"
                 }
 
                 val (latestTag, changelog, apkDownloadUrl) = withContext(Dispatchers.IO) {
@@ -2189,7 +2242,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                                 val body = response.body?.string() ?: ""
                                 val json = JSONObject(body)
                                 val tagName = json.optString("tag_name", "").removePrefix("v")
-                                val bodyText = json.optString("body", "تحديث جديد يتضمن تحسينات للأداء وإصلاحات.")
+                                val bodyText = json.optString("body", "")
                                 val assets = json.optJSONArray("assets")
                                 var apkUrl = ""
                                 if (assets != null) {
@@ -2211,7 +2264,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                         Log.w(TAG, "GitHub API update check failed, attempting web fallback: ${e.message}")
                     }
 
-                    // Fallback to web redirect (bypasses GitHub REST API 403 IP rate-limit completely)
+                    // Fallback to web redirect
                     val noRedirectClient = OkHttpClient.Builder()
                         .followRedirects(false)
                         .followSslRedirects(false)
@@ -2227,29 +2280,29 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                             val rawTag = location.substringAfterLast("/tag/").trim()
                             val cleanTag = rawTag.removePrefix("v")
                             val apkUrl = "https://github.com/ahanafy41/gemini-audiobook-tts/releases/download/$rawTag/app-debug.apk"
-                            val notes = "تحديث جديد يتضمن تحسينات للأداء وإصلاحات لمكتبة جيميني."
-                            Triple(cleanTag, notes, apkUrl)
+                            Triple(cleanTag, "", apkUrl)
                         } else {
-                            throw IllegalStateException("تعذر جلب التحديث من الخادم (${response.code})")
+                            throw IllegalStateException("Failed to fetch update info (${response.code})")
                         }
                     }
                 }
 
                 val hasNewVersion = isVersionNewer(latestTag, currentVersionName)
                 if (hasNewVersion && apkDownloadUrl.isNotBlank()) {
-                    announceStatus("يتوفر تحديث جديد: الإصدار $latestTag")
+                    announceStatus(getString(R.string.updates_available_title, latestTag))
                     showUpdateAvailableDialog(latestTag, changelog, apkDownloadUrl)
                 } else {
                     if (userTriggered) {
-                        announceStatus("أنت تستخدم أحدث إصدار متوفر بالفعل ($currentVersionName)")
-                        Toast.makeText(this@MainActivity, "التطبيق محدث لأحدث إصدار ($currentVersionName)", Toast.LENGTH_LONG).show()
+                        announceStatus(getString(R.string.updates_latest, currentVersionName))
+                        Toast.makeText(this@MainActivity, getString(R.string.updates_latest, currentVersionName), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Update check failed: ${e.message}")
                 if (userTriggered) {
-                    announceStatus("تعذر التحقق من التحديثات: ${e.localizedMessage ?: e.message}")
-                    Toast.makeText(this@MainActivity, "خطأ في فحص التحديثات: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                    val err = getString(R.string.updates_failed, e.localizedMessage ?: e.message)
+                    announceStatus(err)
+                    Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -2270,10 +2323,13 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
     }
 
     private fun showUpdateAvailableDialog(version: String, notes: String, downloadUrl: String) {
+        val notesText = if (notes.isNotBlank()) notes else getString(R.string.app_name)
+        val msg = getString(R.string.updates_dialog_body_format, notesText)
+
         AlertDialog.Builder(this)
-            .setTitle("تحديث جديد متاح: v$version")
-            .setMessage("$notes\n\nهل ترغب في تحميل وتثبيت التحديث الآن؟")
-            .setPositiveButton("تحميل وتثبيت التحديث") { _, _ ->
+            .setTitle(getString(R.string.updates_available_title, version))
+            .setMessage(msg)
+            .setPositiveButton(R.string.updates_action_install) { _, _ ->
                 downloadAndInstallUpdate(downloadUrl, version)
             }
             .setNegativeButton(R.string.action_cancel, null)
@@ -2288,7 +2344,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         }
 
         val textProgressInfo = TextView(this).apply {
-            text = "جارِ بدء التحميل..."
+            text = getString(R.string.updates_started_announcement, version)
             textSize = 15f
             setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_high_contrast))
             layoutParams = LinearLayout.LayoutParams(
@@ -2316,18 +2372,18 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
         var callRef: okhttp3.Call? = null
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("جارِ تحميل التحديث v$version")
+            .setTitle(getString(R.string.updates_downloading_title, version))
             .setView(progressLayout)
             .setCancelable(false)
-            .setNegativeButton("إلغاء التحميل") { _, _ ->
+            .setNegativeButton(R.string.updates_action_cancel_download) { _, _ ->
                 isCancelled = true
                 callRef?.cancel()
-                announceStatus("تم إلغاء تحميل التحديث")
+                announceStatus(getString(R.string.updates_cancelled_announcement))
             }
             .create()
 
         dialog.show()
-        announceStatus("بدأ تحميل التحديث v$version... يرجى الانتظار")
+        announceStatus(getString(R.string.updates_started_announcement, version))
 
         lifecycleScope.launch {
             try {
@@ -2344,8 +2400,8 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                     val call = client.newCall(req)
                     callRef = call
                     call.execute().use { resp ->
-                        if (!resp.isSuccessful) throw IllegalStateException("فشل التحميل (${resp.code})")
-                        val body = resp.body ?: throw IllegalStateException("ملف التحديث فارغ")
+                        if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
+                        val body = resp.body ?: throw IllegalStateException("Empty body")
                         val totalBytes = body.contentLength()
                         val tempFile = File(cacheDir, "GeminiAudiobook_update.tmp")
 
@@ -2357,7 +2413,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                                 while (true) {
                                     if (isCancelled) {
                                         tempFile.delete()
-                                        throw CancellationException("تم إلغاء التحميل")
+                                        throw CancellationException("Cancelled")
                                     }
                                     val read = input.read(buffer)
                                     if (read == -1) break
@@ -2373,18 +2429,17 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                                             progressBar.progress = percent
                                             textProgressInfo.text = String.format(
                                                 java.util.Locale.US,
-                                                "تم تحميل %.1f من %.1f ميجابايت (%d%%)",
+                                                getString(R.string.updates_progress_text_format),
                                                 downloadedMB,
                                                 totalMB,
                                                 percent
                                             )
                                         }
 
-                                        // Announce every 25% for screen readers (TalkBack / Jieshuo)
                                         if (percent >= lastAnnouncedPercent + 25 && percent < 100) {
                                             lastAnnouncedPercent = (percent / 25) * 25
                                             withContext(Dispatchers.Main) {
-                                                announceStatus("اكتمال التحميل: $lastAnnouncedPercent%")
+                                                announceStatus(getString(R.string.updates_percent_announcement, lastAnnouncedPercent))
                                             }
                                         }
                                     }
@@ -2400,7 +2455,7 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 if (!isCancelled) {
                     withContext(Dispatchers.Main) {
                         dialog.dismiss()
-                        announceStatus("اكتمل تحميل التحديث 100%. جارِ فتح شاشة التثبيت...")
+                        announceStatus(getString(R.string.update_download_complete))
                         installApkFile(apkFile)
                     }
                 }
@@ -2412,8 +2467,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                 Log.e(TAG, "Download update failed: ${e.message}")
                 withContext(Dispatchers.Main) {
                     dialog.dismiss()
-                    announceStatus("فشل تحميل التحديث: ${e.localizedMessage ?: e.message}")
-                    Toast.makeText(this@MainActivity, "خطأ في التحميل: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                    val err = getString(R.string.update_download_failed, e.localizedMessage ?: e.message)
+                    announceStatus(err)
+                    Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -2421,14 +2477,14 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
 
     private fun installApkFile(apkFile: File) {
         if (!apkFile.exists() || apkFile.length() < 1000) {
-            Toast.makeText(this, "ملف التحديث غير صالح", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_invalid_update_file), Toast.LENGTH_SHORT).show()
             return
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!packageManager.canRequestPackageInstalls()) {
-                announceStatus("يرجى تفعيل خيار السماح بتثبيت التطبيقات من هذا المصدر لمتابعة التحديث")
-                Toast.makeText(this, "يرجى منح إذن تثبيت التطبيقات من خارج المتجر", Toast.LENGTH_LONG).show()
+                announceStatus(getString(R.string.update_install_perm_msg))
+                Toast.makeText(this, getString(R.string.toast_install_perm), Toast.LENGTH_LONG).show()
                 val permissionIntent = Intent(
                     Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                     Uri.parse("package:$packageName")
@@ -2452,8 +2508,9 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
             startActivity(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch package installer: ${e.message}")
-            announceStatus("تعذر فتح مثبت الحزم: ${e.localizedMessage ?: e.message}")
-            Toast.makeText(this, "خطأ أثناء التثبيت: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+            val err = getString(R.string.status_conversion_error, e.localizedMessage ?: e.message)
+            announceStatus(err)
+            Toast.makeText(this, err, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -2479,15 +2536,11 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
 
             textTitle.text = book.title
             if (isIncomplete) {
-                textSubtitle.text = "${book.chaptersCount} من أصل $totalChapters فصول جاهزة (غير مكتمل)"
-                if (book.chaptersCount == 0) {
-                    view.contentDescription = "${book.title}، غير مكتمل، 0 فصول جاهزة من أصل $totalChapters. اضغط للاستئناف، أو اضغط مطولاً للخيارات"
-                } else {
-                    view.contentDescription = "${book.title}، يحتوي على ${book.chaptersCount} فصول جاهزة من أصل $totalChapters (غير مكتمل). اضغط للاستئناف أو التشغيل، أو اضغط مطولاً للخيارات"
-                }
+                textSubtitle.text = context.getString(R.string.book_subtitle_incomplete, book.chaptersCount, totalChapters)
+                view.contentDescription = context.getString(R.string.desc_book_incomplete, book.title, book.chaptersCount, totalChapters)
             } else {
-                textSubtitle.text = "${book.chaptersCount} فصل (مكتمل)"
-                view.contentDescription = "${book.title}، مكتمل، يحتوي على ${book.chaptersCount} فصول. اضغط للتشغيل، أو اضغط مطولاً للخيارات"
+                textSubtitle.text = context.getString(R.string.book_subtitle_complete, book.chaptersCount)
+                view.contentDescription = context.getString(R.string.desc_book_complete, book.title, book.chaptersCount)
             }
 
             view.setOnClickListener {
@@ -2497,11 +2550,11 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
                     } else {
                         AlertDialog.Builder(context)
                             .setTitle(book.title)
-                            .setMessage("هذا الكتاب غير مكتمل (${book.chaptersCount} من أصل $totalChapters فصول جاهزة).\nماذا تود أن تفعل؟")
-                            .setPositiveButton("استئناف التحويل") { _, _ ->
+                            .setMessage(context.getString(R.string.book_incomplete_dialog_msg, book.chaptersCount, totalChapters))
+                            .setPositiveButton(R.string.action_resume_conversion) { _, _ ->
                                 resumeIncompleteBook(book)
                             }
-                            .setNeutralButton("تشغيل المنجز") { _, _ ->
+                            .setNeutralButton(R.string.action_play_done) { _, _ ->
                                 playBook(book, chapterIndex = 1)
                             }
                             .setNegativeButton(R.string.action_cancel, null)

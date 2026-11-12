@@ -33,3 +33,7 @@ The Android application previously had only Arabic string resources in `res/valu
    - Add a language selection preference in the Settings tab (العربية / English / الافتراضي للنظام).
    - Persist user choice in `SharedPreferences`.
    - Apply locale dynamically via `AppCompatDelegate.setApplicationLocales` and `ContextWrapper` configuration to ensure TalkBack/Jieshuo accessibility announcements update immediately.
+3. **100% Comprehensive Parity & Polish (v1.5.4)**:
+   - Migrated all dialog XML layouts (`dialog_paste_text.xml`, `dialog_voice_replication.xml`, `activity_main.xml`, `item_book.xml`) to use resource IDs (`@string/...`).
+   - Localized notification channels and system service messages in `AudiobookPlayerService.kt` and `AudioExporter.kt`.
+   - Polished English translations to eliminate unnatural phrasing and ensure full parity between Arabic and English modes.

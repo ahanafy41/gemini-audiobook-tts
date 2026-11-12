@@ -16,8 +16,7 @@
         android:layout_height="wrap_content"
         android:textSize="20sp"
         android:textStyle="bold"
-        android:textColor="@color/text_high_contrast"
-        android:text="عنوان الكتاب" />
+        android:textColor="@color/text_high_contrast" />
 
     <TextView
         android:id="@+id/textBookSubtitle"
@@ -25,7 +24,6 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:textSize="15sp"
-        android:textColor="@color/text_secondary"
-        android:text="5 فصول • اضغط للتشغيل • اضغط مطولاً للحذف" />
+        android:textColor="@color/text_secondary" />
 
 </LinearLayout>

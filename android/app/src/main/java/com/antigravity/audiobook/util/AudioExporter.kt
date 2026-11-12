@@ -319,7 +319,8 @@ object AudioExporter {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             }
-            val chooser = Intent.createChooser(intent, "مشاركة فصول: ${book.title}").apply {
+            val chooserTitle = context.getString(R.string.share_chapters_chooser_title, book.title)
+        val chooser = Intent.createChooser(intent, chooserTitle).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(chooser)
