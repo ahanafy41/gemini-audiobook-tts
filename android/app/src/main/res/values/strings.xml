@@ -1,60 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">مكتبة جيميني الصوتية</string>
-    <string name="title_my_books">المكتبة</string>
-    <string name="action_add_book">إضافة كتاب</string>
-    <string name="action_paste_text">لصق نص</string>
-    <string name="action_settings">الإعدادات</string>
-    <string name="action_play">تشغيل</string>
-    <string name="action_pause">إيقاف مؤقت</string>
-    <string name="action_rewind">إرجاع 15 ثانية</string>
-    <string name="action_fast_forward">تقديم 30 ثانية</string>
-    <string name="action_prev_chapter">السابق</string>
-    <string name="action_next_chapter">التالي</string>
-    <string name="action_speed">السرعة: 1.0x</string>
-    <string name="label_no_books">المكتبة فارغة</string>
-    <string name="label_mini_player">المشغل</string>
-    <string name="dialog_enter_api_key">مفتاح Gemini API</string>
-    <string name="action_save">حفظ</string>
-    <string name="action_cancel">إلغاء</string>
+    <string name="app_name">Gemini Audiobook</string>
+    <string name="title_my_books">Library</string>
+    <string name="action_add_book">Add Book</string>
+    <string name="action_paste_text">Paste Text</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_play">Play</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_rewind">Rewind 15s</string>
+    <string name="action_fast_forward">Forward 30s</string>
+    <string name="action_prev_chapter">Previous</string>
+    <string name="action_next_chapter">Next</string>
+    <string name="action_speed">Speed: 1.0x</string>
+    <string name="label_no_books">Library is empty</string>
+    <string name="label_mini_player">Player</string>
+    <string name="dialog_enter_api_key">Gemini API Key</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
     <string name="hint_api_key">AIzaSy...</string>
-    <string name="status_synthesizing">جارِ توليد الصوت...</string>
-    <string name="status_ready">جاهز للاستماع</string>
-    <string name="confirm_delete_title">حذف الكتاب</string>
-    <string name="confirm_delete_msg">هل تريد حذف هذا الكتاب وملفاته الصوتية؟</string>
-    <string name="action_delete">حذف</string>
+    <string name="status_synthesizing">Synthesizing audio...</string>
+    <string name="status_ready">Ready to listen</string>
+    <string name="confirm_delete_title">Delete Book</string>
+    <string name="confirm_delete_msg">Do you want to delete this book and its audio files?</string>
+    <string name="action_delete">Delete</string>
 
     <!-- Bottom Navigation Tabs -->
-    <string name="nav_library">المكتبة</string>
-    <string name="nav_player">المشغل</string>
-    <string name="nav_studio">الأصوات</string>
-    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_library">Library</string>
+    <string name="nav_player">Player</string>
+    <string name="nav_studio">Voices</string>
+    <string name="nav_settings">Settings</string>
 
     <!-- Voice Studio -->
-    <string name="title_studio">الأصوات</string>
-    <string name="label_narrator_voice">صوت الراوي</string>
-    <string name="label_voice_style">نمط الإلقاء</string>
-    <string name="label_multi_speaker">الحوار المتعدد</string>
-    <string name="label_character_voice">صوت الشخصيات</string>
-    <string name="btn_create_custom_voice">تصميم صوت جديد</string>
-    <string name="btn_replicate_voice">استنساخ صوت جديد</string>
-    <string name="btn_test_voice_audition">معاينة الصوت</string>
-    <string name="btn_open_full_player">المشغل</string>
+    <string name="title_studio">Voices</string>
+    <string name="label_narrator_voice">Narrator Voice</string>
+    <string name="label_voice_style">Speaking Style</string>
+    <string name="label_multi_speaker">Multi-Speaker Dialogue</string>
+    <string name="label_character_voice">Character Voice</string>
+    <string name="btn_create_custom_voice">Design New Voice</string>
+    <string name="btn_replicate_voice">Clone / Replicate Voice</string>
+    <string name="btn_test_voice_audition">Preview Voice</string>
+    <string name="btn_open_full_player">Player</string>
 
     <!-- Voice Design Dialog -->
-    <string name="dialog_voice_design_title">تصميم صوت جديد</string>
-    <string name="dialog_voice_design_name_hint">اسم الصوت (مثال: راوٍ مصري)</string>
-    <string name="dialog_voice_design_prompt_hint">وصف النبرة بالإنجليزية (مثال: Warm, deep resonant baritone, Egyptian accent)</string>
-    <string name="btn_generate_voice">توليد الصوت</string>
+    <string name="dialog_voice_design_title">Design New Voice</string>
+    <string name="dialog_voice_design_name_hint">Voice Name (e.g. British Narrator)</string>
+    <string name="dialog_voice_design_prompt_hint">Tone description (e.g. Warm, deep resonant baritone)</string>
+    <string name="btn_generate_voice">Generate Voice</string>
 
     <!-- Settings Tab -->
-    <string name="title_settings_full">الإعدادات</string>
-    <string name="label_api_key_status">مفتاح API</string>
-    <string name="btn_update_api_key">تعديل المفتاح</string>
-    <string name="btn_test_api_connection">فحص الاتصال</string>
-    <string name="label_model_selection">النموذج</string>
-    <string name="btn_sync_custom_voices">مزامنة الأصوات</string>
-    <string name="label_enter_custom_voice_id">+ إدخال معرف صوت يدوياً</string>
-    <string name="dialog_enter_voice_id_title">معرف الصوت</string>
-    <string name="dialog_enter_voice_id_hint">مثال: voice_42n103zlznqt</string>
+    <string name="title_settings_full">Settings</string>
+    <string name="label_api_key_status">API Key</string>
+    <string name="btn_update_api_key">Update Key</string>
+    <string name="btn_test_api_connection">Test Connection</string>
+    <string name="label_model_selection">Model</string>
+    <string name="btn_sync_custom_voices">Sync Voices</string>
+    <string name="label_enter_custom_voice_id">+ Enter Custom Voice ID Manually</string>
+    <string name="dialog_enter_voice_id_title">Voice ID</string>
+    <string name="dialog_enter_voice_id_hint">e.g. voice_42n103zlznqt</string>
+
+    <!-- Language Selection -->
+    <string name="label_language_selection">Language / اللغة</string>
+    <string name="desc_select_language">Select app interface language</string>
+    <string name="lang_arabic">العربية (Arabic)</string>
+    <string name="lang_english">English</string>
+    <string name="lang_system_default">System Default</string>
+    <string name="toast_language_changed">Language changed successfully</string>
+    <string name="current_language_label">Current Language: %1$s</string>
+
+    <!-- Incomplete Book Resume Card -->
+    <string name="card_resume_title">Incomplete Book</string>
+    <string name="card_resume_info">Incomplete book: %1$s (%2$d of %3$d chapters converted)</string>
+    <string name="action_resume_conversion">Resume Conversion</string>
+    <string name="action_dismiss_resume">Dismiss Resume Card</string>
+    <string name="dialog_book_options_title">Book Options</string>
+    <string name="action_play_completed_chapters">Play Completed Chapters</string>
+    <string name="action_resume_from_current">Resume Conversion from Current Chapter</string>
+
+    <!-- 429 & Quota Dialog -->
+    <string name="dialog_quota_exceeded_title">Quota Limit Reached (429)</string>
+    <string name="dialog_quota_exceeded_msg">Gemini API quota reached. You can wait and retry or update the API key.</string>
+    <string name="action_retry_now">Retry Now</string>
+    <string name="action_edit_key">Update API Key</string>
+
+    <!-- Storage & Permissions -->
+    <string name="label_storage_path">Storage Path</string>
+    <string name="storage_path_info">Path: Internal Storage / GeminiAudiobook</string>
+    <string name="btn_storage_permission">All Files Access: Check Permission</string>
+    <string name="desc_storage_permission">Check and configure all files access permission</string>
+
+    <!-- Updates -->
+    <string name="label_updates">Updates</string>
+    <string name="app_version_label">Version: %1$s</string>
+    <string name="btn_check_updates">Check for Updates</string>
+    <string name="desc_check_updates">Check for new application updates and install automatically</string>
+
+    <!-- Status & Announcements -->
+    <string name="status_tab_library">Library Tab</string>
+    <string name="status_tab_player">Player Tab</string>
+    <string name="status_tab_studio">Voice Studio Tab</string>
+    <string name="status_tab_settings">Settings Tab</string>
+    <string name="status_converting">Converting book to audio...</string>
+    <string name="status_conversion_success">Book converted successfully!</string>
+    <string name="status_conversion_error">Error during book conversion</string>
+    <string name="status_conversion_paused">Conversion paused</string>
+    <string name="toast_no_text_or_file">Please paste text or select a book file first</string>
+    <string name="status_connection_success">Connected successfully to Gemini API!</string>
+    <string name="status_connection_failed">Connection failed: %1$s</string>
+    <string name="toast_key_saved">API Key saved successfully</string>
 </resources>

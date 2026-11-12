@@ -85,6 +85,58 @@ class GeminiTtsClient(
         return if (activeKeyIndex in apiKeys.indices) apiKeys[activeKeyIndex] else apiKeys[0]
     }
 
+    /**
+     * Finds the next ready API key in round-robin sequence whose 60s cycle has elapsed.
+     * If all candidate keys are currently in cooldown, selects the key with the smallest
+     * remaining wait time so delay is strictly minimized without violating the 1 RPM limit.
+     */
+    fun getNextReadyKey(): Pair<Int, String> {
+        if (apiKeys.isEmpty()) return Pair(0, "")
+        if (apiKeys.size == 1) return Pair(0, apiKeys[0])
+
+        val qm = quotaManager
+        val now = System.currentTimeMillis()
+        val requiredIntervalMs = strictPacingSeconds * 1000L
+
+        // 1. Identify non-exhausted candidate keys
+        val candidateIndices = apiKeys.indices.filter { idx ->
+            qm == null || qm.isKeyAvailable(apiKeys[idx], modelId)
+        }
+        if (candidateIndices.isEmpty()) {
+            val fallbackIdx = activeKeyIndex.coerceIn(apiKeys.indices)
+            return Pair(fallbackIdx, apiKeys[fallbackIdx])
+        }
+
+        // 2. Round-Robin Search: Check if any key is ready right now
+        for (i in apiKeys.indices) {
+            val idx = (activeKeyIndex + i) % apiKeys.size
+            if (idx in candidateIndices) {
+                val key = apiKeys[idx]
+                val lastTime = keyLastRequestTime[key.trim()] ?: 0L
+                if (now - lastTime >= requiredIntervalMs) {
+                    activeKeyIndex = idx
+                    return Pair(idx, key)
+                }
+            }
+        }
+
+        // 3. If all candidate keys are cooling down, select the one with the smallest remaining wait
+        var bestIdx = candidateIndices[0]
+        var minWaitMs = Long.MAX_VALUE
+        for (idx in candidateIndices) {
+            val key = apiKeys[idx]
+            val lastTime = keyLastRequestTime[key.trim()] ?: 0L
+            val elapsed = now - lastTime
+            val wait = (requiredIntervalMs - elapsed).coerceAtLeast(0L)
+            if (wait < minWaitMs) {
+                minWaitMs = wait
+                bestIdx = idx
+            }
+        }
+        activeKeyIndex = bestIdx
+        return Pair(bestIdx, apiKeys[bestIdx])
+    }
+
     fun hasApiKey(): Boolean = apiKeys.any { it.isNotBlank() && it.trim().length >= 15 }
 
     companion object {
@@ -367,8 +419,10 @@ class GeminiTtsClient(
         var lastError: Exception? = null
 
         for (attempt in 0 until totalAttempts) {
-            val currentKey = getActiveApiKey()
+            val (currentIdx, currentKey) = getNextReadyKey()
+            activeKeyIndex = currentIdx
             enforceKeyPacing(currentKey)
+            recordKeyRequestTime(currentKey)
             val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$currentKey"
 
             val request = Request.Builder()
@@ -407,7 +461,6 @@ class GeminiTtsClient(
 
                     // Success: Record quota success
                     quotaManager?.recordSuccess(currentKey, modelId)
-                    recordKeyRequestTime(currentKey)
                     val responseStr = response.body?.string() ?: ""
                     val json = JSONObject(responseStr)
                     val rawAudio = extractAudioBytes(json)
@@ -432,6 +485,9 @@ class GeminiTtsClient(
                 }
 
                 if (audioResult != null) {
+                    if (apiKeys.size > 1) {
+                        activeKeyIndex = (currentIdx + 1) % apiKeys.size
+                    }
                     return@withContext audioResult
                 }
             } catch (qee: QuotaExceededException) {

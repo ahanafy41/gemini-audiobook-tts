@@ -34,6 +34,8 @@ import android.widget.Toast
 import java.util.concurrent.CancellationException
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import okhttp3.OkHttpClient
@@ -83,6 +85,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         private const val KEY_MODEL_ID = "gemini_model_id"
         private const val KEY_CUSTOM_VOICES_JSON = "custom_voices_json"
         private const val KEY_CUSTOM_VOICE_INSTRUCTIONS = "custom_voice_instructions"
+        private const val KEY_APP_LANGUAGE = "gemini_app_language"
 
         private const val DEFAULT_NARRATOR_VOICE = "Charon"
         private const val DEFAULT_CHARACTER_VOICE = "Kore"
@@ -140,6 +143,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private lateinit var btnEditApiKey: Button
     private lateinit var btnTestApiKey: Button
     private lateinit var btnSelectModel: Button
+    private lateinit var btnSelectLanguage: Button
     private lateinit var textStorageFolderInfo: TextView
     private lateinit var btnStoragePermission: Button
     private lateinit var textAppVersion: TextView
@@ -228,6 +232,17 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         settingsPrefs = getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
+        // Apply saved language locale if explicitly set
+        val savedLang = settingsPrefs.getString(KEY_APP_LANGUAGE, null)
+        if (savedLang != null) {
+            val currentLocales = AppCompatDelegate.getApplicationLocales()
+            if (savedLang.isEmpty() && !currentLocales.isEmpty) {
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+            } else if (savedLang.isNotEmpty() && currentLocales.toLanguageTags() != savedLang) {
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(savedLang))
+            }
+        }
+
         loadCachedCustomVoices()
         initViews()
         setupBottomNavigation()
@@ -290,6 +305,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
         btnEditApiKey = findViewById(R.id.btnEditApiKey)
         btnTestApiKey = findViewById(R.id.btnTestApiKey)
         btnSelectModel = findViewById(R.id.btnSelectModel)
+        btnSelectLanguage = findViewById(R.id.btnSelectLanguage)
         textStorageFolderInfo = findViewById(R.id.textStorageFolderInfo)
         btnStoragePermission = findViewById(R.id.btnStoragePermission)
         textAppVersion = findViewById(R.id.textAppVersion)
@@ -304,17 +320,17 @@ class MainActivity : AppCompatActivity(), Player.Listener {
             when (item.itemId) {
                 R.id.tab_library -> {
                     switchTab(layoutTabLibrary)
-                    announceStatus("تبويب المكتبة والكتب الصوتية")
+                    announceStatus(getString(R.string.status_tab_library))
                     true
                 }
                 R.id.tab_player -> {
                     switchTab(layoutTabPlayer)
-                    announceStatus("تبويب المشغل الصوتي الكامل")
+                    announceStatus(getString(R.string.status_tab_player))
                     true
                 }
                 R.id.tab_studio -> {
                     switchTab(layoutTabStudio)
-                    announceStatus("تبويب استوديو الأصوات وأنماط الإلقاء")
+                    announceStatus(getString(R.string.status_tab_studio))
                     if (customVoices.isEmpty()) {
                         fetchAndLoadCustomVoices(userTriggered = false)
                     }
@@ -322,7 +338,7 @@ class MainActivity : AppCompatActivity(), Player.Listener {
                 }
                 R.id.tab_settings -> {
                     switchTab(layoutTabSettings)
-                    announceStatus("تبويب إعدادات التطبيق")
+                    announceStatus(getString(R.string.status_tab_settings))
                     true
                 }
                 else -> false
@@ -467,6 +483,10 @@ class MainActivity : AppCompatActivity(), Player.Listener {
 
         btnSelectModel.setOnClickListener {
             showModelSelectionDialog()
+        }
+
+        btnSelectLanguage.setOnClickListener {
+            showLanguageSelectionDialog()
         }
 
         btnStoragePermission.setOnClickListener {
@@ -1277,6 +1297,7 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
 
         val modelId = settingsPrefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
         btnSelectModel.text = "النموذج: $modelId"
+        updateLanguageButtonLabel()
 
         val currentVer = try {
             packageManager.getPackageInfo(packageName, 0).versionName ?: "1.4.4"
@@ -1457,6 +1478,50 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
             .show()
     }
 
+    private fun showLanguageSelectionDialog() {
+        val options = arrayOf(
+            getString(R.string.lang_arabic),
+            getString(R.string.lang_english),
+            getString(R.string.lang_system_default)
+        )
+        val tags = arrayOf("ar", "en", "")
+        val currentTag = settingsPrefs.getString(KEY_APP_LANGUAGE, "") ?: ""
+        var selectedIdx = tags.indexOf(currentTag)
+        if (selectedIdx < 0) selectedIdx = 2 // System default
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.label_language_selection)
+            .setSingleChoiceItems(options, selectedIdx) { dialog, which ->
+                val chosenTag = tags[which]
+                settingsPrefs.edit().putString(KEY_APP_LANGUAGE, chosenTag).apply()
+                applyAppLanguage(chosenTag)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun applyAppLanguage(tag: String) {
+        val localeList = if (tag.isBlank()) {
+            LocaleListCompat.getEmptyLocaleList()
+        } else {
+            LocaleListCompat.forLanguageTags(tag)
+        }
+        AppCompatDelegate.setApplicationLocales(localeList)
+        updateLanguageButtonLabel()
+        announceStatus(getString(R.string.toast_language_changed))
+    }
+
+    private fun updateLanguageButtonLabel() {
+        val tag = settingsPrefs.getString(KEY_APP_LANGUAGE, "") ?: ""
+        val label = when (tag) {
+            "ar" -> getString(R.string.lang_arabic)
+            "en" -> getString(R.string.lang_english)
+            else -> getString(R.string.lang_system_default)
+        }
+        btnSelectLanguage.text = String.format(getString(R.string.current_language_label), label)
+    }
+
     // -------------------------------------------------------------------------
     // Audio Playback & Book Management
     // -------------------------------------------------------------------------
@@ -1615,8 +1680,9 @@ Speaker2: أهلاً بك يا صديقي! وهذا فحص لصوت الشخصي
         if (incompleteBook != null) {
             val total = incompleteBook.manifest.optInt("total_chapters", incompleteBook.chaptersCount)
             cardResumeIncompleteBook.visibility = View.VISIBLE
-            textResumeBookInfo.text = "يوجد كتاب غير مكتمل: ${incompleteBook.title} (تم إنجاز ${incompleteBook.chaptersCount} من $total فصول)"
-            cardResumeIncompleteBook.contentDescription = "تنبيه: يوجد كتاب غير مكتمل، ${incompleteBook.title}، تم إنجاز ${incompleteBook.chaptersCount} من $total فصول. زر استئناف التحويل متاح."
+            val resumeInfo = String.format(getString(R.string.card_resume_info), incompleteBook.title, incompleteBook.chaptersCount, total)
+            textResumeBookInfo.text = resumeInfo
+            cardResumeIncompleteBook.contentDescription = resumeInfo
             btnResumeBook.setOnClickListener {
                 resumeIncompleteBook(incompleteBook)
             }
@@ -1847,17 +1913,17 @@ Speaker2: رائع جداً، النبرة تبدو طبيعية وسلسة لل
 
     private fun showQuotaExceededDialog(sourceFile: File, bookDir: File, bookTitle: String) {
         AlertDialog.Builder(this)
-            .setTitle("حد الاستخدام (HTTP 429)")
-            .setMessage("تم تجاوز حد الطلبات المسموح به للدقيقة لنموذج Gemini.\n\nتم حفظ جميع الفصول والمقاطع السابقة ولن تضيع.\nيمكنك الانتظار دقيقة وإعادة المحاولة الآن، أو تعديل مفتاح API.")
-            .setPositiveButton("إعادة المحاولة الآن") { _, _ ->
+            .setTitle(R.string.dialog_quota_exceeded_title)
+            .setMessage(R.string.dialog_quota_exceeded_msg)
+            .setPositiveButton(R.string.action_retry_now) { _, _ ->
                 announceStatus("إعادة محاولة تحويل «$bookTitle»...")
                 startBookProcessing(sourceFile, bookDir, bookTitle)
             }
-            .setNeutralButton("تعديل مفتاح API") { _, _ ->
+            .setNeutralButton(R.string.action_edit_key) { _, _ ->
                 bottomNav.selectedItemId = R.id.tab_settings
                 showApiKeyEditDialog()
             }
-            .setNegativeButton("لاحقاً", null)
+            .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 

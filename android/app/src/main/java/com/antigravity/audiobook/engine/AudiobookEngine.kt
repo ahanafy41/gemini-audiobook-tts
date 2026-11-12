@@ -152,13 +152,9 @@ class AudiobookEngine(
                 }
                 chunkFiles.add(chunkFile)
 
-                // Strict 60s pacing window: Wait for the remainder of the full minute to guarantee zero RPM quota exhaustion
+                // Lightweight 1s pacing between network requests; per-key 60s cycle rate-limiting is strictly enforced by GeminiTtsClient
                 if (synthesizedNetwork && (cIdx < textChunks.size - 1 || i < parsedBook.chapters.size - 1)) {
-                    val chunkElapsedMs = System.currentTimeMillis() - chunkStartTime
-                    val remainingMinuteMs = (60_000L - chunkElapsedMs).coerceIn(5_000L, 60_000L)
-                    val remainingSec = (remainingMinuteMs + 999) / 1000
-                    Log.i(TAG, "Rate-limit pacing: Chunk synthesized in ${chunkElapsedMs / 1000}s. Waiting remaining ${remainingSec}s to complete the full 60s minute window before next request...")
-                    delay(remainingMinuteMs)
+                    delay(1000L)
                 }
             }
 

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">مكتبة جيميني الصوتية</string>
+    <string name="title_my_books">المكتبة</string>
+    <string name="action_add_book">إضافة كتاب</string>
+    <string name="action_paste_text">لصق نص</string>
+    <string name="action_settings">الإعدادات</string>
+    <string name="action_play">تشغيل</string>
+    <string name="action_pause">إيقاف مؤقت</string>
+    <string name="action_rewind">إرجاع 15 ثانية</string>
+    <string name="action_fast_forward">تقديم 30 ثانية</string>
+    <string name="action_prev_chapter">السابق</string>
+    <string name="action_next_chapter">التالي</string>
+    <string name="action_speed">السرعة: 1.0x</string>
+    <string name="label_no_books">المكتبة فارغة</string>
+    <string name="label_mini_player">المشغل</string>
+    <string name="dialog_enter_api_key">مفتاح Gemini API</string>
+    <string name="action_save">حفظ</string>
+    <string name="action_cancel">إلغاء</string>
+    <string name="hint_api_key">AIzaSy...</string>
+    <string name="status_synthesizing">جارِ توليد الصوت...</string>
+    <string name="status_ready">جاهز للاستماع</string>
+    <string name="confirm_delete_title">حذف الكتاب</string>
+    <string name="confirm_delete_msg">هل تريد حذف هذا الكتاب وملفاته الصوتية؟</string>
+    <string name="action_delete">حذف</string>
+
+    <!-- Bottom Navigation Tabs -->
+    <string name="nav_library">المكتبة</string>
+    <string name="nav_player">المشغل</string>
+    <string name="nav_studio">الأصوات</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Voice Studio -->
+    <string name="title_studio">الأصوات</string>
+    <string name="label_narrator_voice">صوت الراوي</string>
+    <string name="label_voice_style">نمط الإلقاء</string>
+    <string name="label_multi_speaker">الحوار المتعدد</string>
+    <string name="label_character_voice">صوت الشخصيات</string>
+    <string name="btn_create_custom_voice">تصميم صوت جديد</string>
+    <string name="btn_replicate_voice">استنساخ صوت جديد</string>
+    <string name="btn_test_voice_audition">معاينة الصوت</string>
+    <string name="btn_open_full_player">المشغل</string>
+
+    <!-- Voice Design Dialog -->
+    <string name="dialog_voice_design_title">تصميم صوت جديد</string>
+    <string name="dialog_voice_design_name_hint">اسم الصوت (مثال: راوٍ مصري)</string>
+    <string name="dialog_voice_design_prompt_hint">وصف النبرة بالإنجليزية (مثال: Warm, deep resonant baritone, Egyptian accent)</string>
+    <string name="btn_generate_voice">توليد الصوت</string>
+
+    <!-- Settings Tab -->
+    <string name="title_settings_full">الإعدادات</string>
+    <string name="label_api_key_status">مفتاح API</string>
+    <string name="btn_update_api_key">تعديل المفتاح</string>
+    <string name="btn_test_api_connection">فحص الاتصال</string>
+    <string name="label_model_selection">النموذج</string>
+    <string name="btn_sync_custom_voices">مزامنة الأصوات</string>
+    <string name="label_enter_custom_voice_id">+ إدخال معرف صوت يدوياً</string>
+    <string name="dialog_enter_voice_id_title">معرف الصوت</string>
+    <string name="dialog_enter_voice_id_hint">مثال: voice_42n103zlznqt</string>
+
+    <!-- Language Selection -->
+    <string name="label_language_selection">لغة التطبيق</string>
+    <string name="desc_select_language">زر اختيار لغة واجهة التطبيق</string>
+    <string name="lang_arabic">العربية</string>
+    <string name="lang_english">English (الإنجليزية)</string>
+    <string name="lang_system_default">الافتراضي للنظام</string>
+    <string name="toast_language_changed">تم تغيير لغة التطبيق بنجاح</string>
+    <string name="current_language_label">اللغة الحالية: %1$s</string>
+
+    <!-- Incomplete Book Resume Card -->
+    <string name="card_resume_title">كتاب غير مكتمل</string>
+    <string name="card_resume_info">يوجد كتاب غير مكتمل: %1$s (تم تحويل %2$d من %3$d فصول)</string>
+    <string name="action_resume_conversion">استئناف التحويل</string>
+    <string name="action_dismiss_resume">إغلاق بطاقة الاستئناف</string>
+    <string name="dialog_book_options_title">خيارات الكتاب</string>
+    <string name="action_play_completed_chapters">تشغيل الفصول المنجزة</string>
+    <string name="action_resume_from_current">استئناف التحويل من الفصل الحالي</string>
+
+    <!-- 429 & Quota Dialog -->
+    <string name="dialog_quota_exceeded_title">تجاوز حصة الاستخدام (429)</string>
+    <string name="dialog_quota_exceeded_msg">وصلت للحد الأقصى لطلبات Gemini API. يمكنك الانتظار والمحاولة مجدداً أو تعديل المفتاح.</string>
+    <string name="action_retry_now">إعادة المحاولة الآن</string>
+    <string name="action_edit_key">تعديل مفتاح API</string>
+
+    <!-- Storage & Permissions -->
+    <string name="label_storage_path">مسار حفظ الكتب والملفات</string>
+    <string name="storage_path_info">المسار: الذاكرة الداخلية / GeminiAudiobook</string>
+    <string name="btn_storage_permission">الوصول الكامل للملفات: فحص الإذن</string>
+    <string name="desc_storage_permission">زر ضبط والتحقق من إذن الوصول الكامل لجميع الملفات بالذاكرة الداخلية</string>
+
+    <!-- Updates -->
+    <string name="label_updates">التحديثات</string>
+    <string name="app_version_label">الإصدار: %1$s</string>
+    <string name="btn_check_updates">فحص التحديثات</string>
+    <string name="desc_check_updates">زر فحص وجود تحديث جديد للتطبيق وتثبيته تلقائياً</string>
+
+    <!-- Status & Announcements -->
+    <string name="status_tab_library">تبويب المكتبة</string>
+    <string name="status_tab_player">تبويب المشغل</string>
+    <string name="status_tab_studio">تبويب استوديو الأصوات وأنماط الإلقاء</string>
+    <string name="status_tab_settings">تبويب إعدادات التطبيق</string>
+    <string name="status_converting">جارِ تحويل الكتاب إلى صوت...</string>
+    <string name="status_conversion_success">تم تحويل الكتاب بنجاح!</string>
+    <string name="status_conversion_error">حدث خطأ أثناء تحويل الكتاب</string>
+    <string name="status_conversion_paused">تم إيقاف التحويل مؤقتاً</string>
+    <string name="toast_no_text_or_file">يرجى لصق نص أو اختيار ملف كتاب أولاً</string>
+    <string name="status_connection_success">الاتصال ناجح بمفتاح Gemini API!</string>
+    <string name="status_connection_failed">فشل الاتصال: %1$s</string>
+    <string name="toast_key_saved">تم حفظ المفتاح بنجاح</string>
+</resources>
