@@ -381,4 +381,10 @@
     <string name="share_chapters_chooser_title">مشاركة فصول: %1$s</string>
     <string name="default_book_title">كتاب صوتي</string>
     <string name="default_chapter_title_format">فصل %1$d</string>
+    <string name="dialog_conversion_title">جاري التحويل الصوتي عبر Gemini</string>
+    <string name="btn_run_in_background">المتابعة في الخلفية</string>
+    <string name="btn_cancel_conversion">إلغاء التحويل</string>
+    <string name="conversion_key_format">المفتاح النشط: رقم %1$d من %2$d</string>
+    <string name="conversion_chunk_format">المقطع %1$d من %2$d</string>
+    <string name="conversion_starting">جاري بدء التحويل الصوتي عبر Gemini...</string>
 </resources>

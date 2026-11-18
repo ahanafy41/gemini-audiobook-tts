@@ -183,6 +183,8 @@ class MainActivity : AppCompatActivity(), Player.Listener {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var conversionDialog: AlertDialog? = null
+    private var conversionJob: kotlinx.coroutines.Job? = null
 
     private val booksList = mutableListOf<BookItem>()
     private lateinit var booksAdapter: BooksAdapter
@@ -1979,7 +1981,8 @@ Speaker2: Outstanding! The tone sounds remarkably natural and smooth!"""
 
     private fun startBookProcessing(sourceFile: File, bookDir: File, bookTitle: String) {
         acquireWakeLock()
-        lifecycleScope.launch {
+        conversionJob = lifecycleScope.launch {
+            var dialogShown = false
             try {
                 val keys = getStoredApiKeys()
                 val narratorVoice = settingsPrefs.getString(KEY_GEMINI_VOICE, DEFAULT_NARRATOR_VOICE) ?: DEFAULT_NARRATOR_VOICE
@@ -1997,6 +2000,44 @@ Speaker2: Outstanding! The tone sounds remarkably natural and smooth!"""
                     return@launch
                 }
 
+                // Inflate and show Conversion Progress Dialog
+                val dialogView = LayoutInflater.from(this@MainActivity).inflate(R.layout.dialog_conversion_progress, null, false)
+                val textConversionBookTitle = dialogView.findViewById<TextView>(R.id.textConversionBookTitle)
+                val textConversionChapter = dialogView.findViewById<TextView>(R.id.textConversionChapter)
+                val textConversionChunk = dialogView.findViewById<TextView>(R.id.textConversionChunk)
+                val textConversionStatus = dialogView.findViewById<TextView>(R.id.textConversionStatus)
+                val textConversionKey = dialogView.findViewById<TextView>(R.id.textConversionKey)
+                val btnConversionBackground = dialogView.findViewById<Button>(R.id.btnConversionBackground)
+                val btnConversionCancel = dialogView.findViewById<Button>(R.id.btnConversionCancel)
+
+                textConversionBookTitle.text = bookTitle
+                textConversionChapter.text = getString(R.string.conversion_starting)
+                textConversionChunk.text = ""
+                textConversionStatus.text = getString(R.string.status_converting)
+                textConversionKey.text = getString(R.string.conversion_key_format, 1, keys.size)
+
+                conversionDialog = AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.dialog_conversion_title)
+                    .setView(dialogView)
+                    .setCancelable(false)
+                    .create()
+
+                btnConversionBackground.setOnClickListener {
+                    conversionDialog?.dismiss()
+                    announceStatus(if (isArabic) "يستمر التحويل في الخلفية..." else "Conversion running in background...")
+                }
+
+                btnConversionCancel.setOnClickListener {
+                    conversionJob?.cancel()
+                    conversionDialog?.dismiss()
+                    val cancelMsg = if (isArabic) "تم إلغاء التحويل" else "Conversion cancelled"
+                    announceStatus(cancelMsg)
+                    Toast.makeText(this@MainActivity, cancelMsg, Toast.LENGTH_SHORT).show()
+                }
+
+                conversionDialog?.show()
+                dialogShown = true
+
                 bookDir.mkdirs()
                 val sourceExt = if (sourceFile.extension.isNotBlank()) sourceFile.extension else "txt"
                 val persistentSource = File(bookDir, "source_book.$sourceExt")
@@ -2009,6 +2050,22 @@ Speaker2: Outstanding! The tone sounds remarkably natural and smooth!"""
                     modelId = modelId,
                     quotaManager = keyQuotaManager
                 )
+
+                ttsClient.onCountdownProgress = { sec, reason, keyIdx, totalKeys ->
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        textConversionStatus.text = reason
+                        textConversionKey.text = getString(R.string.conversion_key_format, keyIdx, totalKeys)
+                    }
+                }
+
+                ttsClient.onKeyRotated = { keyIdx, totalKeys, reason ->
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        textConversionKey.text = getString(R.string.conversion_key_format, keyIdx, totalKeys)
+                        textConversionStatus.text = reason
+                        announceStatus(reason)
+                    }
+                }
+
                 val multiConfig = if (isMultiSpeaker) {
                     MultiSpeakerConfig(
                         isEnabled = true,
@@ -2032,11 +2089,26 @@ Speaker2: Outstanding! The tone sounds remarkably natural and smooth!"""
                 announceStatus(getString(R.string.status_converting_book_format, bookTitle, stylePreset.title(isArabic)))
 
                 withContext(Dispatchers.IO) {
-                    engine.processBook(persistentSource, customTitle = bookTitle) { current, total, title ->
-                        lifecycleScope.launch(Dispatchers.Main) {
-                            announceStatus(getString(R.string.status_converting_chapter_format, current, total, title))
+                    engine.processBook(
+                        bookFile = persistentSource,
+                        customTitle = bookTitle,
+                        onProgressUpdate = { current, total, title ->
+                            lifecycleScope.launch(Dispatchers.Main) {
+                                val chapText = getString(R.string.status_converting_chapter_format, current, total, title)
+                                textConversionChapter.text = chapText
+                                announceStatus(chapText)
+                            }
+                        },
+                        onChunkProgress = { currentChap, totalChaps, currentChunk, totalChunks, title ->
+                            lifecycleScope.launch(Dispatchers.Main) {
+                                textConversionChunk.text = getString(R.string.conversion_chunk_format, currentChunk, totalChunks)
+                            }
                         }
-                    }
+                    )
+                }
+
+                if (dialogShown) {
+                    conversionDialog?.dismiss()
                 }
 
                 val folderDisplay = if (hasStoragePermission()) {
@@ -2048,13 +2120,16 @@ Speaker2: Outstanding! The tone sounds remarkably natural and smooth!"""
                 Toast.makeText(this@MainActivity, getString(R.string.status_conversion_success, folderDisplay), Toast.LENGTH_LONG).show()
                 refreshBooksList()
             } catch (e: Exception) {
+                if (dialogShown) {
+                    conversionDialog?.dismiss()
+                }
                 Log.e(TAG, "Error processing book: ${e.message}", e)
                 refreshBooksList()
                 val isQuota = e is QuotaExceededException || e.message?.contains("429") == true || e.message?.contains("Rate limit") == true
                 if (isQuota) {
                     announceStatus(getString(R.string.dialog_quota_exceeded_msg))
                     showQuotaExceededDialog(sourceFile, bookDir, bookTitle)
-                } else {
+                } else if (e !is kotlinx.coroutines.CancellationException) {
                     val err = getString(R.string.status_conversion_error, e.localizedMessage ?: e.message)
                     announceStatus(err)
                     Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()

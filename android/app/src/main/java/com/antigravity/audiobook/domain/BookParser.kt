@@ -29,6 +29,68 @@ class BookParser(
             Regex("^\\s*(Chapter|Section|Part|Book|Volume|Act|Scene)\\s+([0-9IVXLCDMivxlcdm]+)[:–—\\-\\s]*(.*?)$", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE)),
             Regex("^[ \\t]*([0-9]{1,3}|[IVXLCDM]{1,8})[.:–—\\-][ \\t]+([^\\r\\n]{1,60})$", RegexOption.MULTILINE)
         )
+
+        val TERMINAL_PUNCTUATION = setOf('.', '!', '?', '؟', '؛', ':', '»', '"', '”')
+
+        /**
+         * Cleans up unformatted raw text (e.g. OCR output or PDF copy-paste):
+         * - Removes invisible control characters while preserving Arabic diacritics.
+         * - Rejoins lines that were arbitrarily broken mid-sentence without terminal punctuation.
+         */
+        fun normalizeUnformattedText(rawText: String): String {
+            if (rawText.isBlank()) return ""
+            var text = rawText.replace("\r\n", "\n").replace("\r", "\n")
+            text = text.replace(Regex("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]"), "")
+            text = text.replace(Regex("[ \\t]{2,}"), " ")
+
+            val rawLines = text.split("\n")
+            val reconstructed = mutableListOf<String>()
+            var bufferLine = ""
+
+            for (line in rawLines) {
+                val stripped = line.trim()
+                if (stripped.isEmpty()) {
+                    if (bufferLine.isNotEmpty()) {
+                        reconstructed.add(bufferLine)
+                        bufferLine = ""
+                    }
+                    reconstructed.add("")
+                    continue
+                }
+
+                val isHeading = Regex("^#{1,6}\\s+").containsMatchIn(stripped) ||
+                    CHAPTER_PATTERNS.any { it.containsMatchIn(stripped) }
+
+                if (isHeading) {
+                    if (bufferLine.isNotEmpty()) {
+                        reconstructed.add(bufferLine)
+                        bufferLine = ""
+                    }
+                    reconstructed.add(stripped)
+                    continue
+                }
+
+                if (bufferLine.isEmpty()) {
+                    bufferLine = stripped
+                } else {
+                    val lastChar = bufferLine.lastOrNull()
+                    if ((lastChar != null && lastChar in TERMINAL_PUNCTUATION) || bufferLine.length >= 220) {
+                        reconstructed.add(bufferLine)
+                        bufferLine = stripped
+                    } else {
+                        bufferLine = "$bufferLine $stripped"
+                    }
+                }
+            }
+
+            if (bufferLine.isNotEmpty()) {
+                reconstructed.add(bufferLine)
+            }
+
+            var joined = reconstructed.joinToString("\n")
+            joined = joined.replace(Regex("\\n{3,}"), "\n\n")
+            return joined.trim()
+        }
     }
 
     private val markdownStripper = MarkdownStripper()
@@ -59,7 +121,8 @@ class BookParser(
     }
 
     fun parseContent(content: String, title: String = "بدون اسم", filePath: String = ""): ParsedBook {
-        val trimmed = content.trim()
+        val normalized = normalizeUnformattedText(content)
+        val trimmed = normalized.trim()
         val resolvedTitle = if (title.isBlank()) "بدون اسم" else title.trim()
         if (trimmed.isEmpty()) {
             return ParsedBook(resolvedTitle, filePath, 0, emptyList())

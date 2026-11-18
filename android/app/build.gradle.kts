@@ -11,8 +11,8 @@ android {
         applicationId = "com.antigravity.audiobook"
         minSdk = 26
         targetSdk = 34
-        versionCode = 31
-        versionName = "1.5.4"
+        versionCode = 32
+        versionName = "1.5.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

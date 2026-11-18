@@ -42,7 +42,7 @@ class AudiobookEngine(
     }
 
     private val bookParser = BookParser()
-    private val chunker = SmartTextChunker(3800)
+    private val chunker = SmartTextChunker(SmartTextChunker.DEFAULT_MAX_CHUNK_SIZE)
     private val progressFile = File(outputDir, "progress.json")
     private val manifestFile = File(outputDir, "book_manifest.json")
 
@@ -88,7 +88,8 @@ class AudiobookEngine(
     suspend fun processBook(
         bookFile: File,
         customTitle: String? = null,
-        onProgressUpdate: (currentChapter: Int, totalChapters: Int, chapterTitle: String) -> Unit = { _, _, _ -> }
+        onProgressUpdate: (currentChapter: Int, totalChapters: Int, chapterTitle: String) -> Unit = { _, _, _ -> },
+        onChunkProgress: ((currentChapter: Int, totalChapters: Int, currentChunk: Int, totalChunks: Int, chapterTitle: String) -> Unit)? = null
     ): JSONObject = withContext(Dispatchers.IO) {
         saveBookSettings()
         val parsedBook: ParsedBook = bookParser.parseFile(bookFile, customTitle)
@@ -130,6 +131,7 @@ class AudiobookEngine(
             val chunkFiles = mutableListOf<File>()
 
             for (cIdx in textChunks.indices) {
+                onChunkProgress?.invoke(chapterIdx, parsedBook.chapters.size, cIdx + 1, textChunks.size, chapter.chapterTitle)
                 val chunkText = textChunks[cIdx]
                 val chunkFilename = String.format("%s_part_%03d.wav", chapterKey, cIdx + 1)
                 val chunkFile = File(rawChunksDir, chunkFilename)

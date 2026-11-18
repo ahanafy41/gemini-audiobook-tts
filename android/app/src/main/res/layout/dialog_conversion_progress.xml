@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@color/surface_dark">
+
+    <!-- Book Title Header -->
+    <TextView
+        android:id="@+id/textConversionBookTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_high_contrast"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:paddingBottom="12dp" />
+
+    <!-- Progress Indicator -->
+    <ProgressBar
+        android:id="@+id/progressConversion"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:indeterminate="true"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Current Chapter Progress -->
+    <TextView
+        android:id="@+id/textConversionChapter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/primary_accessible"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:accessibilityLiveRegion="polite"
+        android:paddingBottom="6dp" />
+
+    <!-- Current Chunk Progress -->
+    <TextView
+        android:id="@+id/textConversionChunk"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:paddingBottom="6dp" />
+
+    <!-- Detailed Status & Pacing Countdown -->
+    <TextView
+        android:id="@+id/textConversionStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/accent_control"
+        android:textSize="14sp"
+        android:accessibilityLiveRegion="polite"
+        android:paddingBottom="8dp" />
+
+    <!-- Active Key Info -->
+    <TextView
+        android:id="@+id/textConversionKey"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp"
+        android:paddingBottom="16dp" />
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btnConversionBackground"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:text="@string/btn_run_in_background"
+            android:textColor="@color/on_primary"
+            android:backgroundTint="@color/primary_accessible"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnConversionCancel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/btn_cancel_conversion"
+            android:textColor="@color/text_high_contrast"
+            android:backgroundTint="@color/surface_dark" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -25,10 +25,9 @@ class KeyQuotaManager(private val storageDir: File) {
     companion object {
         private const val TAG = "KeyQuotaManager"
         const val DEFAULT_FILENAME = "key_quotas.json"
-        const val DEFAULT_TRANSIENT_RETRY_DELAY = 60L
+        const val DEFAULT_TRANSIENT_RETRY_DELAY = 65L
         val PACIFIC_ZONE: ZoneId = ZoneId.of("America/Los_Angeles")
 
-        @Deprecated("Artificial cap removed; Google Cloud server enforces quota limits via 429")
         val MODEL_DAILY_CAPS = mapOf(
             "gemini-3.8-flash-tts" to 100,
             "gemini-3.8-flash-lite-tts" to 100,
@@ -36,8 +35,17 @@ class KeyQuotaManager(private val storageDir: File) {
             "gemini-2.5-flash-preview-tts" to 10,
             "gemini-2.5-pro-preview-tts" to 10
         )
-        @Deprecated("Artificial cap removed; Google Cloud server enforces quota limits via 429")
         const val DEFAULT_DAILY_CAP = 10
+
+        fun isDailyQuotaError(errorMessage: String, retryDelaySeconds: Long? = null): Boolean {
+            if (retryDelaySeconds != null && retryDelaySeconds > 120L) {
+                return true
+            }
+            return errorMessage.contains("GenerateRequestsPerDayPerProjectPerModel", ignoreCase = true) ||
+                errorMessage.contains("QuotaFailure", ignoreCase = true) ||
+                errorMessage.contains("limit: 10", ignoreCase = true) ||
+                errorMessage.contains("Daily limit", ignoreCase = true)
+        }
 
         fun computeKeyId(apiKey: String): String {
             val clean = apiKey.trim()
@@ -60,7 +68,6 @@ class KeyQuotaManager(private val storageDir: File) {
             }
         }
 
-        @Deprecated("Artificial cap removed; returns default cap for informational purposes")
         fun getModelDailyCap(modelId: String): Int {
             for ((knownModel, cap) in MODEL_DAILY_CAPS) {
                 if (modelId.contains(knownModel)) {
@@ -330,7 +337,12 @@ class KeyQuotaManager(private val storageDir: File) {
                 save()
             }
 
-            // No artificial client-side cap blocking; paid accounts can use higher quotas.
+            // Proactive daily cap rotation matching desktop
+            val dailyCap = getModelDailyCap(modelId)
+            if (rec.optInt("requests_today", 0) >= dailyCap) {
+                return false
+            }
+
             return true
         }
     }
@@ -353,7 +365,16 @@ class KeyQuotaManager(private val storageDir: File) {
             rec.put("requests_today", reqToday)
             rec.put("last_success_at", System.currentTimeMillis() / 1000)
             rec.put("status", "AVAILABLE")
-            // No client-side artificial exhaustion cap. Server 429 governs quota.
+
+            // Proactive daily limit check matching desktop (100 for 3.8 Flash, 10 for legacy)
+            val dailyCap = getModelDailyCap(modelId)
+            if (reqToday >= dailyCap) {
+                val now = System.currentTimeMillis() / 1000
+                val delaySec = getSecondsUntilPacificMidnight()
+                rec.put("status", "EXHAUSTED")
+                rec.put("resets_at", now + delaySec)
+                safeLogI(TAG, "Key ${maskKey(cleanKey)} reached full daily limit ($dailyCap requests) on $modelId. Scheduled reset in ${delaySec}s.")
+            }
             save()
         }
     }
@@ -371,13 +392,14 @@ class KeyQuotaManager(private val storageDir: File) {
             val rec = getModelRecord(cleanKey, modelId, create = true) ?: return 0L
             val now = System.currentTimeMillis() / 1000
 
-            val isQuotaExhausted = errorMessage.contains("quota", ignoreCase = true) ||
-                errorMessage.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
-                errorMessage.contains("limit", ignoreCase = true)
+            val isDaily = isDailyQuotaError(errorMessage, retryDelaySeconds)
 
             val delay = when {
+                isDaily -> {
+                    if (retryDelaySeconds != null && retryDelaySeconds > 120L) retryDelaySeconds
+                    else getSecondsUntilPacificMidnight()
+                }
                 retryDelaySeconds != null -> retryDelaySeconds
-                isQuotaExhausted -> getSecondsUntilPacificMidnight()
                 else -> DEFAULT_TRANSIENT_RETRY_DELAY
             }
             val resetsAt = now + delay
@@ -388,7 +410,7 @@ class KeyQuotaManager(private val storageDir: File) {
             rec.put("last_error", errorMessage.take(300))
             save()
 
-            safeLogI(TAG, "Recorded 429 exhaustion for ${maskKey(cleanKey)} on $modelId. Resets in ${delay}s.")
+            safeLogI(TAG, "Recorded 429 exhaustion for ${maskKey(cleanKey)} on $modelId (isDaily=$isDaily). Resets in ${delay}s.")
             return resetsAt
         }
     }

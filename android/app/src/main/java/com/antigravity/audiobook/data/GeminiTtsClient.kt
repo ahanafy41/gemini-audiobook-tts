@@ -67,6 +67,9 @@ class GeminiTtsClient(
     private val keyLastRequestTime = java.util.concurrent.ConcurrentHashMap<String, Long>()
     var strictPacingSeconds: Long = 60L // Mandatory 60s pacing per API key to guarantee zero 429 quota hits
 
+    var onCountdownProgress: ((remainingSeconds: Int, reason: String, activeKeyIndex: Int, totalKeys: Int) -> Unit)? = null
+    var onKeyRotated: ((newKeyIndex: Int, totalKeys: Int, reason: String) -> Unit)? = null
+
     fun setApiKeys(keys: List<String>) {
         this.apiKeys = keys.map { it.trim() }.filter { it.isNotEmpty() }
         this.activeKeyIndex = quotaManager?.findFirstAvailableKeyIndex(this.apiKeys, modelId) ?: 0
@@ -76,7 +79,6 @@ class GeminiTtsClient(
 
     fun getActiveApiKey(): String {
         if (apiKeys.isEmpty()) return ""
-        // Ensure activeKeyIndex is pointing to an available key if possible
         val qm = quotaManager
         if (qm != null) {
             val validIdx = qm.findFirstAvailableKeyIndex(apiKeys, modelId, activeKeyIndex)
@@ -317,9 +319,14 @@ class GeminiTtsClient(
         val remainingMs = requiredIntervalMs - elapsed
 
         if (remainingMs > 0) {
-            val waitSec = (remainingMs + 999) / 1000
-            Log.i(TAG, "Rate-limit pacing: Waiting ${waitSec}s to complete the 60s window for key ${KeyQuotaManager.maskKey(cleanKey)}...")
-            delay(remainingMs)
+            val totalSec = ((remainingMs + 999) / 1000).toInt()
+            Log.i(TAG, "Rate-limit pacing: Waiting ${totalSec}s for key ${KeyQuotaManager.maskKey(cleanKey)}...")
+            for (sec in totalSec downTo 1) {
+                val reason = "الانتظار الإلزامي بين الطلبات ($sec ثانية)"
+                onCountdownProgress?.invoke(sec, reason, activeKeyIndex + 1, apiKeys.size.coerceAtLeast(1))
+                delay(1000L)
+            }
+            onCountdownProgress?.invoke(0, "جاهز لإرسال الطلب", activeKeyIndex + 1, apiKeys.size.coerceAtLeast(1))
         }
     }
 
@@ -380,14 +387,10 @@ class GeminiTtsClient(
             })
             generationConfig.put("speechConfig", multiSpeakerConfig.toSpeechConfigJson())
         } else {
+            // Pure text in parts[0].text without speechMetadata to prevent voice drift, exactly matching desktop
             val partsArray = JSONArray().apply {
                 put(JSONObject().apply {
                     put("text", cleanText)
-                    if (styleDescription.isNotEmpty()) {
-                        put("speechMetadata", JSONObject().apply {
-                            put("style", styleDescription)
-                        })
-                    }
                 })
             }
             payload.put("contents", JSONArray().apply {
@@ -414,109 +417,167 @@ class GeminiTtsClient(
         payload.put("generationConfig", generationConfig)
 
         val requestBody = payload.toString().toRequestBody(JSON_MEDIA_TYPE)
-        val maxRetriesPerKey = 2
-        val totalAttempts = (apiKeys.size.coerceAtLeast(1)) * maxRetriesPerKey
-        var lastError: Exception? = null
+        val maxKeyRotations = apiKeys.size.coerceAtLeast(1) * 2
+        var keyRotationsCount = 0
 
-        for (attempt in 0 until totalAttempts) {
-            val (currentIdx, currentKey) = getNextReadyKey()
-            activeKeyIndex = currentIdx
-            enforceKeyPacing(currentKey)
-            recordKeyRequestTime(currentKey)
-            val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$currentKey"
+        while (keyRotationsCount < maxKeyRotations) {
+            val qm = quotaManager
+            val dailyCap = KeyQuotaManager.getModelDailyCap(modelId)
+            val currentKey = getActiveApiKey()
+            val usedToday = qm?.getRequestsToday(currentKey, modelId) ?: 0
 
-            val request = Request.Builder()
-                .url(url)
-                .post(requestBody)
-                .header("User-Agent", "GeminiAudiobookAndroid/1.0")
-                .build()
-
-            try {
-                val audioResult: ByteArray? = httpClient.newCall(request).execute().use { response ->
-                    if (response.code == 429) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.w(TAG, "Gemini HTTP 429 Rate Limit on key ${KeyQuotaManager.maskKey(currentKey)}: $errorBody")
-                        val retryDelay = KeyQuotaManager.parseRetryDelay(errorBody)
-                        quotaManager?.record429Exhaustion(currentKey, modelId, retryDelay, errorBody)
-
-                        val (nextIdx, nextKey) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
-                        if (nextIdx != -1 && nextKey != null) {
-                            Log.i(TAG, "Rotating to next ready key: ${KeyQuotaManager.maskKey(nextKey)}")
-                            activeKeyIndex = nextIdx
-                            lastError = QuotaExceededException("Rate limit 429")
-                            return@use null
-                        } else {
-                            val (_, renewalMsg) = quotaManager?.getEarliestRenewalTime(apiKeys, modelId) ?: Pair(0L, "غير محدد")
-                            throw QuotaExceededException("جميع مفاتيح API مستنفدة الحصة. أقرب موعد للتجديد بعد: $renewalMsg.")
-                        }
-                    } else if (response.code in 500..599) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
-                        throw TransientTtsException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
-                    } else if (!response.isSuccessful) {
-                        val errorBody = response.body?.string() ?: ""
-                        Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
-                        throw IllegalStateException("API error ${response.code}: $errorBody")
-                    }
-
-                    // Success: Record quota success
-                    quotaManager?.recordSuccess(currentKey, modelId)
-                    val responseStr = response.body?.string() ?: ""
-                    val json = JSONObject(responseStr)
-                    val rawAudio = extractAudioBytes(json)
-                    val parsed = extractPcmData(rawAudio)
-                    if (parsed != null) {
-                        createWavHeader(
-                            parsed.pcm,
-                            sampleRate = parsed.sampleRate,
-                            channels = parsed.channels,
-                            bitsPerSample = parsed.bitsPerSample
-                        )
-                    } else if (rawAudio.size >= 4 &&
-                        rawAudio[0] == 'R'.code.toByte() &&
-                        rawAudio[1] == 'I'.code.toByte() &&
-                        rawAudio[2] == 'F'.code.toByte() &&
-                        rawAudio[3] == 'F'.code.toByte()
-                    ) {
-                        rawAudio
-                    } else {
-                        createWavHeader(rawAudio, sampleRate = 24000)
-                    }
-                }
-
-                if (audioResult != null) {
-                    if (apiKeys.size > 1) {
-                        activeKeyIndex = (currentIdx + 1) % apiKeys.size
-                    }
-                    return@withContext audioResult
-                }
-            } catch (qee: QuotaExceededException) {
-                lastError = qee
-                val (nextIdx, _) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
-                if (nextIdx == -1) {
-                    throw qee
-                }
-            } catch (tte: TransientTtsException) {
-                lastError = tte
-                Log.w(TAG, "Transient TTS error on attempt ${attempt + 1}/$totalAttempts: ${tte.message}")
-                val (nextIdx, nextKey) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
-                if (nextIdx != -1 && nextKey != null && apiKeys.size > 1) {
-                    Log.i(TAG, "Failing over to alternate key: ${KeyQuotaManager.maskKey(nextKey)}")
+            // 1. Proactive daily cap & availability check
+            if (usedToday >= dailyCap || (qm != null && !qm.isKeyAvailable(currentKey, modelId))) {
+                val (nextIdx, nextKey) = qm?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                if (nextIdx != -1 && nextKey != null) {
+                    val msg = "المفتاح الحالي مستنفد الحصة للنموذج $modelId - الانتقال للمفتاح ${nextIdx + 1}"
+                    Log.i(TAG, msg)
                     activeKeyIndex = nextIdx
+                    keyRotationsCount++
+                    onKeyRotated?.invoke(nextIdx + 1, apiKeys.size, msg)
+                    continue
+                } else {
+                    val (_, renewalMsg) = qm?.getEarliestRenewalTime(apiKeys, modelId) ?: Pair(0L, "غير محدد")
+                    throw QuotaExceededException("استُنفدت جميع المفاتيح المتاحة (${apiKeys.size}) للنموذج $modelId. ستبدأ أول حصة بالتجدد بعد: $renewalMsg.")
                 }
-                delay(1500L * ((attempt % 3) + 1))
-            } catch (ioe: IOException) {
-                lastError = ioe
-                Log.w(TAG, "Network connection error on attempt ${attempt + 1}/$totalAttempts: ${ioe.message}")
-                val (nextIdx, nextKey) = quotaManager?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
-                if (nextIdx != -1 && nextKey != null && apiKeys.size > 1) {
-                    activeKeyIndex = nextIdx
-                }
-                delay(2000L * ((attempt % 3) + 1))
             }
+
+            // 2. Strict 60-second pacing interval between requests
+            enforceKeyPacing(currentKey)
+
+            // 3. Transient 429 Retry Loop on the active key
+            var retries429 = 0
+            val max429Retries = 2
+            var keyRotatedDueTo429 = false
+
+            while (retries429 <= max429Retries) {
+                recordKeyRequestTime(currentKey)
+                val url = customEndpoint ?: "$BASE_URL/$modelId:generateContent?key=$currentKey"
+                val request = Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .header("User-Agent", "GeminiAudiobookAndroid/2.0")
+                    .build()
+
+                onCountdownProgress?.invoke(0, "جاري إرسال الطلب وتوليد الصوت للمقطع...", activeKeyIndex + 1, apiKeys.size.coerceAtLeast(1))
+
+                try {
+                    val audioResult: ByteArray? = httpClient.newCall(request).execute().use { response ->
+                        if (response.code == 429) {
+                            val errorBody = response.body?.string() ?: ""
+                            Log.w(TAG, "Gemini HTTP 429 on key ${KeyQuotaManager.maskKey(currentKey)}: $errorBody")
+                            val retryDelay = KeyQuotaManager.parseRetryDelay(errorBody)
+                            val isDaily = KeyQuotaManager.isDailyQuotaError(errorBody, retryDelay)
+
+                            if (isDaily) {
+                                qm?.record429Exhaustion(currentKey, modelId, retryDelay, errorBody)
+                                val (nextIdx, nextKey) = qm?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                                if (nextIdx != -1 && nextKey != null) {
+                                    val msg = "استُنفدت الحصة اليومية للمفتاح الحالي - الانتقال للمفتاح ${nextIdx + 1}"
+                                    Log.i(TAG, msg)
+                                    activeKeyIndex = nextIdx
+                                    keyRotatedDueTo429 = true
+                                    onKeyRotated?.invoke(nextIdx + 1, apiKeys.size, msg)
+                                    return@use null
+                                } else {
+                                    val (_, renewalMsg) = qm?.getEarliestRenewalTime(apiKeys, modelId) ?: Pair(0L, "غير محدد")
+                                    throw QuotaExceededException("استُنفدت الحصة اليومية لجميع المفاتيح (${apiKeys.size}) للنموذج $modelId. أقرب موعد للتجديد بعد: $renewalMsg.")
+                                }
+                            }
+
+                            // Transient 429: Cooldown 65s and retry on same key
+                            retries429++
+                            if (retries429 <= max429Retries) {
+                                val waitSec = (retryDelay?.toInt() ?: 65).coerceIn(10, 65)
+                                Log.w(TAG, "Transient 429 on key ${KeyQuotaManager.maskKey(currentKey)}. Waiting ${waitSec}s before retry $retries429/$max429Retries...")
+                                for (rem in waitSec downTo 1) {
+                                    val reason = "تنبيه 429 عابر من الخادم - محاولة تأكيد $retries429 من $max429Retries للمفتاح ${activeKeyIndex + 1} (انتظار $rem ثانية)"
+                                    onCountdownProgress?.invoke(rem, reason, activeKeyIndex + 1, apiKeys.size.coerceAtLeast(1))
+                                    delay(1000L)
+                                }
+                                onCountdownProgress?.invoke(0, "جاهز لإعادة المحاولة", activeKeyIndex + 1, apiKeys.size.coerceAtLeast(1))
+                                return@use null
+                            } else {
+                                // Confirmed key exhaustion after 2 retries
+                                qm?.record429Exhaustion(currentKey, modelId, retryDelay, errorBody)
+                                val (nextIdx, nextKey) = qm?.getNextAvailableKey(apiKeys, activeKeyIndex, modelId) ?: Pair(-1, null)
+                                if (nextIdx != -1 && nextKey != null) {
+                                    val msg = "تأكد انتهاء حصة المفتاح الحالي بعد محاولتي تأكيد - الانتقال للمفتاح ${nextIdx + 1}"
+                                    Log.i(TAG, msg)
+                                    activeKeyIndex = nextIdx
+                                    keyRotatedDueTo429 = true
+                                    onKeyRotated?.invoke(nextIdx + 1, apiKeys.size, msg)
+                                    return@use null
+                                } else {
+                                    val (_, renewalMsg) = qm?.getEarliestRenewalTime(apiKeys, modelId) ?: Pair(0L, "غير محدد")
+                                    throw QuotaExceededException("استُنفدت حصة جميع المفاتيح للنموذج $modelId بعد محاولات التأكيد. أقرب موعد للتجديد بعد: $renewalMsg.")
+                                }
+                            }
+                        } else if (response.code in 500..599) {
+                            val errorBody = response.body?.string() ?: ""
+                            Log.w(TAG, "Gemini HTTP Server Error ${response.code}: $errorBody")
+                            throw TransientTtsException("API error ${response.code}: خادم جوجل مشغول مؤقتاً.")
+                        } else if (!response.isSuccessful) {
+                            val errorBody = response.body?.string() ?: ""
+                            Log.e(TAG, "Gemini HTTP error ${response.code}: $errorBody")
+                            throw IllegalStateException("API error ${response.code}: $errorBody")
+                        }
+
+                        // Success: Record quota success
+                        qm?.recordSuccess(currentKey, modelId)
+                        val responseStr = response.body?.string() ?: ""
+                        val json = JSONObject(responseStr)
+                        val rawAudio = extractAudioBytes(json)
+                        val parsed = extractPcmData(rawAudio)
+                        val finalWav = if (parsed != null) {
+                            createWavHeader(
+                                parsed.pcm,
+                                sampleRate = parsed.sampleRate,
+                                channels = parsed.channels,
+                                bitsPerSample = parsed.bitsPerSample
+                            )
+                        } else if (rawAudio.size >= 4 &&
+                            rawAudio[0] == 'R'.code.toByte() &&
+                            rawAudio[1] == 'I'.code.toByte() &&
+                            rawAudio[2] == 'F'.code.toByte() &&
+                            rawAudio[3] == 'F'.code.toByte()
+                        ) {
+                            rawAudio
+                        } else {
+                            createWavHeader(rawAudio, sampleRate = 24000)
+                        }
+
+                        // Proactive key rotation if current key just reached daily cap
+                        if (qm != null && !qm.isKeyAvailable(currentKey, modelId) && apiKeys.size > 1) {
+                            val (nextIdx, nextKey) = qm.getNextAvailableKey(apiKeys, activeKeyIndex, modelId)
+                            if (nextIdx != -1 && nextKey != null) {
+                                activeKeyIndex = nextIdx
+                                onKeyRotated?.invoke(nextIdx + 1, apiKeys.size, "المفتاح بلغ الحد اليومي ($dailyCap) - تم التدوير للمفتاح التالي")
+                            }
+                        }
+
+                        return@use finalWav
+                    }
+
+                    if (audioResult != null) {
+                        return@withContext audioResult
+                    }
+                    if (keyRotatedDueTo429) {
+                        break
+                    }
+                } catch (tte: TransientTtsException) {
+                    Log.w(TAG, "Transient 5xx error: ${tte.message}. Retrying in 15s...")
+                    for (rem in 15 downTo 1) {
+                        onCountdownProgress?.invoke(rem, "خطأ خادم مؤقت - إعادة المحاولة بعد $rem ثانية", activeKeyIndex + 1, apiKeys.size.coerceAtLeast(1))
+                        delay(1000L)
+                    }
+                }
+            }
+
+            keyRotationsCount++
         }
 
-        throw lastError ?: QuotaExceededException("تم تجاوز حد الطلبات أو تعذر الاتصال بكافة المفاتيح.")
+        throw QuotaExceededException("تم تجاوز حد الطلبات أو تعذر الاتصال بكافة المفاتيح.")
     }
 
     private fun extractAudioBytes(json: JSONObject): ByteArray {

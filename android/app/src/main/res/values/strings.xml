@@ -381,4 +381,10 @@ Would you like to download and install the update now?</string>
     <string name="share_chapters_chooser_title">Share chapters: %1$s</string>
     <string name="default_book_title">Audiobook</string>
     <string name="default_chapter_title_format">Chapter %1$d</string>
+    <string name="dialog_conversion_title">Gemini Audio Conversion in Progress</string>
+    <string name="btn_run_in_background">Run in Background</string>
+    <string name="btn_cancel_conversion">Cancel Conversion</string>
+    <string name="conversion_key_format">Active API Key: #%1$d of %2$d</string>
+    <string name="conversion_chunk_format">Chunk %1$d of %2$d</string>
+    <string name="conversion_starting">Starting Gemini TTS conversion...</string>
 </resources>
